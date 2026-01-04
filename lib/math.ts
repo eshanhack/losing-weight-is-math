@@ -507,6 +507,9 @@ export function formatBalanceWithGoal(
   color: 'success' | 'warning' | 'danger' | 'neutral';
   vsGoal: number;
   vsGoalText: string;
+  toGoal: number; // Calories needed to reach goal (positive = need to burn more)
+  toMaintenance: number; // Calories until maintenance (positive = can eat more, negative = over)
+  status: 'exceeded' | 'on-track' | 'behind' | 'surplus';
 } {
   const isDeficit = balance < 0;
   const absValue = Math.abs(balance);
@@ -514,10 +517,18 @@ export function formatBalanceWithGoal(
   
   let color: 'success' | 'warning' | 'danger' | 'neutral';
   let vsGoalText: string;
+  let status: 'exceeded' | 'on-track' | 'behind' | 'surplus';
+  
+  // toGoal: positive means need to burn more, negative means exceeded goal
+  const toGoal = balance - goalDeficit; // e.g., -556 - (-868) = 312 (need 312 more)
+  
+  // toMaintenance: positive means can eat more, negative means in surplus
+  const toMaintenance = -balance; // e.g., -(-556) = 556 (can eat 556 more before maintenance)
   
   if (balance >= 0) {
     // At maintenance or surplus - bad
     color = 'danger';
+    status = 'surplus';
     if (balance === 0) {
       vsGoalText = `${Math.abs(goalDeficit).toLocaleString()} to go`;
     } else {
@@ -526,11 +537,13 @@ export function formatBalanceWithGoal(
   } else if (balance <= goalDeficit) {
     // Met or exceeded deficit goal - great! (e.g., -1100 <= -1000)
     color = 'success';
+    status = toGoal === 0 ? 'on-track' : 'exceeded';
     const extra = Math.abs(balance) - Math.abs(goalDeficit);
     vsGoalText = extra === 0 ? 'On target!' : `${extra.toLocaleString()} extra`;
   } else {
     // Deficit but not meeting goal (e.g., -800 when goal is -1000)
     color = 'warning';
+    status = 'behind';
     const remaining = Math.abs(goalDeficit) - Math.abs(balance);
     vsGoalText = `${remaining.toLocaleString()} to go`;
   }
@@ -544,6 +557,9 @@ export function formatBalanceWithGoal(
     color,
     vsGoal,
     vsGoalText,
+    toGoal,
+    toMaintenance,
+    status,
   };
 }
 
