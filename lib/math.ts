@@ -231,20 +231,26 @@ export function calculateWeightChange(
 // ============================================================================
 
 /**
- * Calculate daily surplus/deficit
- * Negative = deficit (GOOD for weight loss)
- * Positive = surplus (bad for weight loss)
+ * Calculate daily caloric balance (deficit/surplus)
+ * 
+ * NEGATIVE = deficit = GOOD for weight loss (you ate less than you burned)
+ * POSITIVE = surplus = BAD for weight loss (you ate more than you burned)
+ * 
+ * Formula: Balance = Intake - (TDEE + Exercise)
+ * 
+ * Examples (TDEE = 1964):
+ * - No food eaten: 0 - 1964 = -1964 (massive deficit - haven't eaten yet)
+ * - Ate 964: 964 - 1964 = -1000 (1000 cal deficit - on target!)
+ * - Ate 1500, burned 536: 1500 - (1964 + 536) = -1000 (same deficit with exercise)
+ * - Ate 2500: 2500 - 1964 = +536 (surplus - overate!)
  */
 export function calculateDailyBalance(
   tdee: number,
   caloricIntake: number,
   caloricOuttake: number = 0
 ): number {
-  // TDEE is what you burn at rest + normal activity
-  // Outtake is additional exercise calories burned
-  // Intake is what you ate
   const totalBurned = tdee + caloricOuttake;
-  return caloricIntake - totalBurned; // Negative = deficit = good
+  return caloricIntake - totalBurned;
 }
 
 /**
@@ -346,6 +352,7 @@ export function calculateProteinGoal(
 
 /**
  * Calculate streak (consecutive days with caloric deficit)
+ * Negative balance = deficit = good
  */
 export function calculateStreak(
   dailyBalances: { date: Date; balance: number }[]
@@ -380,10 +387,10 @@ export function calculateStreak(
     }
     
     if (sorted[i].balance < 0) {
-      // Deficit day - streak continues
+      // Deficit day (negative balance) - streak continues
       streak++;
     } else {
-      // Surplus day - streak broken
+      // Surplus day (zero or positive balance) - streak broken
       break;
     }
   }
@@ -438,6 +445,8 @@ export function getWeightLossMilestone(totalLost: number): {
 
 /**
  * Format calorie number with sign and color hint
+ * NEGATIVE = deficit = GOOD
+ * POSITIVE = surplus = BAD
  */
 export function formatBalance(balance: number): {
   text: string;
@@ -460,46 +469,54 @@ export function formatBalance(balance: number): {
 
 /**
  * Format balance with comparison to goal deficit
- * Returns color based on performance vs goal:
- * - Green: Meeting or exceeding deficit goal
- * - Orange: Deficit but not meeting goal  
- * - Red: Surplus (positive balance)
+ * 
+ * Balance: NEGATIVE = deficit (good), POSITIVE = surplus (bad)
+ * Goal: NEGATIVE number (e.g., -1000 for a 1000 cal deficit goal)
+ * 
+ * Colors:
+ * - Green: balance <= goal (met or exceeded deficit goal, e.g., -1100 <= -1000)
+ * - Orange: balance is negative but > goal (deficit but not enough, e.g., -800 > -1000)
+ * - Red: balance >= 0 (at maintenance or surplus)
  */
 export function formatBalanceWithGoal(
   balance: number, 
-  goalDeficit: number
+  goalDeficit: number // Negative number (e.g., -1000)
 ): {
   text: string;
   isDeficit: boolean;
   color: 'success' | 'warning' | 'danger' | 'neutral';
-  vsGoal: number; // How far off from goal (negative = better than goal)
+  vsGoal: number;
   vsGoalText: string;
 } {
   const isDeficit = balance < 0;
   const absValue = Math.abs(balance);
   const text = balance === 0 ? "0" : `${isDeficit ? '-' : '+'}${absValue.toLocaleString()}`;
   
-  // Goal is expressed as negative (e.g., -1000 for 1000 cal deficit goal)
-  // vsGoal: positive = worse than goal, negative = better than goal
-  const vsGoal = balance - goalDeficit;
-  
   let color: 'success' | 'warning' | 'danger' | 'neutral';
   let vsGoalText: string;
   
-  if (balance > 0) {
-    // Surplus - bad
+  if (balance >= 0) {
+    // At maintenance or surplus - bad
     color = 'danger';
-    vsGoalText = `${Math.abs(goalDeficit) + balance} over goal`;
+    if (balance === 0) {
+      vsGoalText = `${Math.abs(goalDeficit).toLocaleString()} to go`;
+    } else {
+      vsGoalText = `${balance.toLocaleString()} surplus!`;
+    }
   } else if (balance <= goalDeficit) {
-    // Meeting or exceeding deficit goal - great!
+    // Met or exceeded deficit goal - great! (e.g., -1100 <= -1000)
     color = 'success';
-    const extra = Math.abs(balance - goalDeficit);
-    vsGoalText = extra === 0 ? 'On target!' : `${extra} ahead of goal`;
+    const extra = Math.abs(balance) - Math.abs(goalDeficit);
+    vsGoalText = extra === 0 ? 'On target!' : `${extra.toLocaleString()} extra`;
   } else {
-    // Deficit but not meeting goal - okay but could be better
+    // Deficit but not meeting goal (e.g., -800 when goal is -1000)
     color = 'warning';
-    vsGoalText = `${Math.abs(vsGoal)} to go`;
+    const remaining = Math.abs(goalDeficit) - Math.abs(balance);
+    vsGoalText = `${remaining.toLocaleString()} to go`;
   }
+  
+  // vsGoal: how far from goal (negative = exceeded goal, positive = short of goal)
+  const vsGoal = balance - goalDeficit;
   
   return {
     text,

@@ -935,7 +935,7 @@ function DashboardContent() {
       profile.goal_weight_kg,
       new Date(profile.goal_date)
     );
-    // Goal deficit is negative (e.g., -1000 means 1000 calorie deficit goal)
+    // Goal deficit is NEGATIVE (e.g., -1000 means you need to be at -1000 or lower)
     const goalDeficit = -goalAnalysis.dailyDeficit;
 
     // Today's balance: Intake - (TDEE + Exercise)
@@ -1016,7 +1016,8 @@ function DashboardContent() {
         isLocked = true;
       }
       const balance = log ? calculateDailyBalance(tdee, log.caloric_intake, log.caloric_outtake) : 0;
-      // Success = met or exceeded goal deficit (balance <= goalDeficit)
+      // Success = met or exceeded goal deficit (balance <= goalDeficit, since negative = deficit)
+      // e.g., -1100 <= -1000 means you exceeded your 1000 cal deficit goal
       const isSuccess = log ? balance <= goalDeficit : false;
 
       calendarDays.push({
