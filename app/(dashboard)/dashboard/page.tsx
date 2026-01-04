@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
 import { useDashboard } from "../layout";
+import { getLocalDateString, formatTime } from "@/lib/date-utils";
 import {
   calculateAge,
   calculateBMR,
@@ -92,6 +93,16 @@ interface ChatMessage {
   content: string;
   parsedData?: AIParseResponse;
   confirmed?: boolean;
+  timestamp?: string; // ISO timestamp
+}
+
+interface DayEntry {
+  id: string;
+  description: string;
+  calories: number;
+  protein_grams: number;
+  entry_type: "food" | "exercise";
+  created_at: string;
 }
 
 // ============================================================================
@@ -137,7 +148,8 @@ function DashboardStats({
   calendar, 
   profile, 
   logs,
-  onDayClick 
+  onDayClick,
+  onTodayCardClick,
 }: { 
   stats: {
     todayBalance: number;
@@ -159,6 +171,7 @@ function DashboardStats({
   profile: Profile | null;
   logs: DailyLog[];
   onDayClick: (day: CalendarDay) => void;
+  onTodayCardClick: () => void;
 }) {
   // Format balance with goal comparison
   const formattedBalance = formatBalanceWithGoal(stats.todayBalance, stats.goalDeficit);
@@ -191,17 +204,19 @@ function DashboardStats({
 
       {/* Stat Cards - FitFuel style */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 lg:gap-4">
-        {/* Card 1: Today's Balance */}
+        {/* Card 1: Today's Balance - Clickable to see breakdown */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
         >
-          <Card className={`p-4 lg:p-5 bg-card border-border h-full card-hover ${
-            formattedBalance.color === "success" ? "border-success/30" : 
-            formattedBalance.color === "warning" ? "border-gold/30" : 
-            formattedBalance.color === "danger" ? "border-danger/30" : ""
-          }`}>
+          <Card 
+            onClick={onTodayCardClick}
+            className={`p-4 lg:p-5 bg-card border-border h-full card-hover cursor-pointer ${
+              formattedBalance.color === "success" ? "border-success/30" : 
+              formattedBalance.color === "warning" ? "border-gold/30" : 
+              formattedBalance.color === "danger" ? "border-danger/30" : ""
+            }`}>
             <div className="flex items-start justify-between mb-3">
               <div className={`icon-container ${
                 formattedBalance.color === "success" ? "bg-success/10" : 
@@ -490,8 +505,11 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const today = new Date().toISOString().split("T")[0];
+  
+  // Use LOCAL date, not UTC!
+  const today = getLocalDateString();
 
   useEffect(() => {
     loadChatHistory();
@@ -520,6 +538,7 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
           role: m.role as "user" | "assistant",
           content: m.content,
           confirmed: true,
+          timestamp: m.created_at,
         }))
       );
     } else {
@@ -528,6 +547,7 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
           id: "welcome",
           role: "assistant",
           content: "Hey! 👋 Tell me what you ate or did today.\n\nExamples:\n• \"2 eggs and toast for breakfast\"\n• \"30 minute run\"\n• \"Coffee with oat milk\"",
+          timestamp: new Date().toISOString(),
         },
       ]);
     }
@@ -537,10 +557,12 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
     e.preventDefault();
     if (!input.trim() || loading) return;
 
+    const now = new Date().toISOString();
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       role: "user",
       content: input,
+      timestamp: now,
     };
 
     setMessages((prev) => [...prev, userMessage]);
@@ -562,10 +584,12 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
         content: data.message,
         parsedData: data,
         confirmed: false,
+        timestamp: new Date().toISOString(),
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
 
+      // Save to database
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
@@ -582,6 +606,7 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
           id: (Date.now() + 1).toString(),
           role: "assistant",
           content: "Sorry, I had trouble understanding that. Try again?",
+          timestamp: new Date().toISOString(),
         },
       ]);
     }
@@ -591,80 +616,139 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
 
   const handleConfirm = async (messageId: string) => {
     const message = messages.find((m) => m.id === messageId);
-    if (!message?.parsedData) return;
+    if (!message?.parsedData || confirmingId) return;
 
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    setConfirmingId(messageId);
 
-    let { data: log } = await supabase
-      .from("daily_logs")
-      .select("*")
-      .eq("user_id", user.id)
-      .eq("log_date", today)
-      .single();
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setConfirmingId(null);
+        return;
+      }
 
-    if (!log) {
-      const { data: newLog } = await supabase
+      // Use LOCAL date for the log
+      const localToday = getLocalDateString();
+
+      let { data: log } = await supabase
         .from("daily_logs")
-        .insert({ user_id: user.id, log_date: today })
-        .select()
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("log_date", localToday)
         .single();
-      log = newLog;
+
+      if (!log) {
+        const { data: newLog, error } = await supabase
+          .from("daily_logs")
+          .insert({ user_id: user.id, log_date: localToday })
+          .select()
+          .single();
+        
+        if (error) {
+          console.error("Error creating log:", error);
+          setConfirmingId(null);
+          return;
+        }
+        log = newLog;
+      }
+
+      if (!log) {
+        setConfirmingId(null);
+        return;
+      }
+
+      // Insert entries
+      const entries = message.parsedData.items.map((item) => ({
+        daily_log_id: log.id,
+        entry_type: message.parsedData!.type,
+        description: item.description,
+        calories: item.calories,
+        protein_grams: "protein" in item ? item.protein : 0,
+        ai_parsed: true,
+      }));
+
+      const { error: insertError } = await supabase.from("log_entries").insert(entries);
+      if (insertError) {
+        console.error("Error inserting entries:", insertError);
+        setConfirmingId(null);
+        return;
+      }
+
+      // Get all entries and recalculate totals
+      const { data: allEntries } = await supabase
+        .from("log_entries")
+        .select("*")
+        .eq("daily_log_id", log.id);
+
+      if (allEntries) {
+        const foodEntries = allEntries.filter((e) => e.entry_type === "food");
+        const exerciseEntries = allEntries.filter((e) => e.entry_type === "exercise");
+
+        const totalIntake = foodEntries.reduce((sum, e) => sum + (e.calories || 0), 0);
+        const totalOuttake = exerciseEntries.reduce((sum, e) => sum + (e.calories || 0), 0);
+        const totalProtein = foodEntries.reduce((sum, e) => sum + (e.protein_grams || 0), 0);
+
+        await supabase
+          .from("daily_logs")
+          .update({
+            caloric_intake: totalIntake,
+            caloric_outtake: totalOuttake,
+            protein_grams: totalProtein,
+          })
+          .eq("id", log.id);
+      }
+
+      // Mark message as confirmed in local state
+      setMessages((prev) =>
+        prev.map((m) => (m.id === messageId ? { ...m, confirmed: true } : m))
+      );
+
+      // Save confirmation message to database
+      const confirmationContent = "✅ Logged! What else did you have?";
+      await supabase.from("chat_messages").insert({
+        user_id: user.id,
+        role: "assistant",
+        content: confirmationContent,
+        log_date: localToday,
+      });
+
+      // Add confirmation message to local state
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          role: "assistant",
+          content: confirmationContent,
+          confirmed: true,
+          timestamp: new Date().toISOString(),
+        },
+      ]);
+
+      // Trigger dashboard refresh WITHOUT page reload
+      onEntryConfirmed();
+
+    } catch (error) {
+      console.error("Error confirming:", error);
+    } finally {
+      setConfirmingId(null);
     }
+  };
 
-    if (!log) return;
-
-    const entries = message.parsedData.items.map((item) => ({
-      daily_log_id: log.id,
-      entry_type: message.parsedData!.type,
-      description: item.description,
-      calories: item.calories,
-      protein_grams: "protein" in item ? item.protein : 0,
-      ai_parsed: true,
-    }));
-
-    await supabase.from("log_entries").insert(entries);
-
-    const { data: allEntries } = await supabase
-      .from("log_entries")
-      .select("*")
-      .eq("daily_log_id", log.id);
-
-    if (allEntries) {
-      const foodEntries = allEntries.filter((e) => e.entry_type === "food");
-      const exerciseEntries = allEntries.filter((e) => e.entry_type === "exercise");
-
-      const totalIntake = foodEntries.reduce((sum, e) => sum + e.calories, 0);
-      const totalOuttake = exerciseEntries.reduce((sum, e) => sum + e.calories, 0);
-      const totalProtein = foodEntries.reduce((sum, e) => sum + (e.protein_grams || 0), 0);
-
-      await supabase
-        .from("daily_logs")
-        .update({
-          caloric_intake: totalIntake,
-          caloric_outtake: totalOuttake,
-          protein_grams: totalProtein,
-        })
-        .eq("id", log.id);
-    }
-
+  const handleReject = (messageId: string) => {
     setMessages((prev) =>
-      prev.map((m) => (m.id === messageId ? { ...m, confirmed: true } : m))
+      prev.map((m) => (m.id === messageId ? { ...m, confirmed: true, parsedData: undefined } : m))
     );
-
     setMessages((prev) => [
       ...prev,
       {
         id: Date.now().toString(),
         role: "assistant",
-        content: "✅ Logged! What else did you have?",
+        content: "No problem! Try describing it differently.",
         confirmed: true,
+        timestamp: new Date().toISOString(),
       },
     ]);
-
-    // Trigger dashboard refresh
-    onEntryConfirmed();
   };
 
   return (
@@ -692,39 +776,62 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
               animate={{ opacity: 1, y: 0 }}
               className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
             >
-              <div
-                className={`max-w-[85%] rounded-xl px-4 py-2.5 text-sm ${
-                  message.role === "user"
-                    ? "bg-primary text-white rounded-br-none"
-                    : "bg-secondary text-foreground rounded-bl-none"
-                }`}
-              >
-                <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
-
-                {message.parsedData && !message.confirmed && (
-                  <div className="mt-3 pt-3 border-t border-white/10">
-                    <div className="space-y-1.5">
-                      {message.parsedData.items.map((item, idx) => (
-                        <div key={idx} className="flex justify-between gap-3 text-xs">
-                          <span className="truncate opacity-90">{item.description}</span>
-                          <span className="font-medium shrink-0">{item.calories} cal</span>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="mt-3 flex gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() => handleConfirm(message.id)}
-                        className="h-8 text-xs bg-success hover:bg-success/90 text-white flex-1"
-                      >
-                        ✓ Log this
-                      </Button>
-                      <Button size="sm" variant="outline" className="h-8 text-xs border-white/20 hover:bg-white/10">
-                        ✗ Edit
-                      </Button>
-                    </div>
-                  </div>
+              <div className="flex flex-col gap-0.5 max-w-[85%]">
+                {/* Timestamp */}
+                {message.timestamp && (
+                  <span className={`text-[10px] text-muted-foreground ${message.role === "user" ? "text-right" : "text-left"}`}>
+                    {formatTime(message.timestamp)}
+                  </span>
                 )}
+                <div
+                  className={`rounded-xl px-4 py-2.5 text-sm ${
+                    message.role === "user"
+                      ? "bg-primary text-white rounded-br-none"
+                      : "bg-secondary text-foreground rounded-bl-none"
+                  }`}
+                >
+                  <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
+
+                  {message.parsedData && !message.confirmed && (
+                    <div className="mt-3 pt-3 border-t border-white/10">
+                      <div className="space-y-1.5">
+                        {message.parsedData.items.map((item, idx) => (
+                          <div key={idx} className="flex justify-between gap-3 text-xs">
+                            <span className="truncate opacity-90">{item.description}</span>
+                            <div className="flex gap-2 shrink-0">
+                              <span className="font-medium">{item.calories} cal</span>
+                              {"protein" in item && item.protein > 0 && (
+                                <span className="text-muted-foreground">{item.protein}g</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                        <div className="pt-1 mt-1 border-t border-white/5 flex justify-between text-xs font-semibold">
+                          <span>Total</span>
+                          <span>{message.parsedData.total_calories} cal / {message.parsedData.total_protein}g protein</span>
+                        </div>
+                      </div>
+                      <div className="mt-3 flex gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => handleConfirm(message.id)}
+                          disabled={confirmingId === message.id}
+                          className="h-8 text-xs bg-success hover:bg-success/90 text-white flex-1"
+                        >
+                          {confirmingId === message.id ? "Logging..." : "✓ Log this"}
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={() => handleReject(message.id)}
+                          className="h-8 text-xs border-white/20 hover:bg-white/10"
+                        >
+                          ✗ Edit
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </motion.div>
           ))}
@@ -798,6 +905,7 @@ function ResizableSplitView({
   profile,
   logs,
   onDayClick,
+  onTodayCardClick,
   onEntryConfirmed,
 }: {
   stats: {
@@ -820,6 +928,7 @@ function ResizableSplitView({
   profile: Profile | null;
   logs: DailyLog[];
   onDayClick: (day: CalendarDay) => void;
+  onTodayCardClick: () => void;
   onEntryConfirmed: () => void;
 }) {
   const { width: diaryWidth, isResizing, startResizing } = useResizable(380, 280, 600);
@@ -836,7 +945,8 @@ function ResizableSplitView({
           calendar={calendar} 
           profile={profile} 
           logs={logs}
-          onDayClick={onDayClick} 
+          onDayClick={onDayClick}
+          onTodayCardClick={onTodayCardClick}
         />
       </div>
 
@@ -878,6 +988,8 @@ function DashboardContent() {
   const [logs, setLogs] = useState<DailyLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDay, setSelectedDay] = useState<CalendarDay | null>(null);
+  const [dayEntries, setDayEntries] = useState<DayEntry[]>([]);
+  const [loadingEntries, setLoadingEntries] = useState(false);
   const [showWelcome, setShowWelcome] = useState(isWelcome);
 
   const [stats, setStats] = useState({
@@ -927,7 +1039,8 @@ function DashboardContent() {
   };
 
   const calculateStats = (profile: Profile, logs: DailyLog[], sub: Subscription | null) => {
-    const today = new Date().toISOString().split("T")[0];
+    // Use LOCAL date, not UTC!
+    const today = getLocalDateString();
     const todayLog = logs.find((l) => l.log_date === today);
 
     const age = calculateAge(new Date(profile.date_of_birth));
@@ -1001,6 +1114,7 @@ function DashboardContent() {
 
   const buildCalendar = (logs: DailyLog[], sub: Subscription | null, tdee: number, goalDeficit: number) => {
     const today = new Date();
+    const todayStr = getLocalDateString(today);
     const currentMonth = today.getMonth();
     const currentYear = today.getFullYear();
     const firstDay = new Date(currentYear, currentMonth, 1);
@@ -1018,10 +1132,11 @@ function DashboardContent() {
 
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(currentYear, currentMonth, day);
-      const dateStr = date.toISOString().split("T")[0];
+      // Use local date string instead of UTC
+      const dateStr = getLocalDateString(date);
       const log = logs.find((l) => l.log_date === dateStr);
-      const isToday = date.toDateString() === today.toDateString();
-      const isFuture = date > today;
+      const isToday = dateStr === todayStr;
+      const isFuture = date > today && !isToday;
       let isLocked = false;
       if (!isPaid && trialEnd && date > trialEnd && !isFuture) {
         isLocked = true;
@@ -1047,6 +1162,72 @@ function DashboardContent() {
     }
 
     setCalendar(calendarDays);
+  };
+
+  const fetchDayEntries = async (date: string) => {
+    setLoadingEntries(true);
+    setDayEntries([]);
+    
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // First get the daily log for this date
+      const { data: log } = await supabase
+        .from("daily_logs")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("log_date", date)
+        .single();
+
+      if (log) {
+        // Then get all entries for this log
+        const { data: entries } = await supabase
+          .from("log_entries")
+          .select("*")
+          .eq("daily_log_id", log.id)
+          .order("created_at", { ascending: true });
+
+        if (entries) {
+          setDayEntries(entries as DayEntry[]);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching entries:", error);
+    } finally {
+      setLoadingEntries(false);
+    }
+  };
+
+  const handleDayClick = (day: CalendarDay) => {
+    setSelectedDay(day);
+    if (day.date) {
+      fetchDayEntries(day.date);
+    }
+  };
+
+  // Also allow clicking Today's Balance card to open today
+  const handleTodayCardClick = () => {
+    const todayStr = getLocalDateString();
+    const todayDay = calendar.find(d => d.date === todayStr);
+    if (todayDay) {
+      handleDayClick(todayDay);
+    } else {
+      // Create a temporary day object for today
+      handleDayClick({
+        date: todayStr,
+        dayOfMonth: new Date().getDate(),
+        weight: null,
+        balance: stats.todayBalance,
+        protein: stats.todayProtein,
+        isSuccess: stats.todayBalance <= stats.goalDeficit,
+        isLocked: false,
+        isFuture: false,
+        isToday: true,
+        hasData: stats.todayIntake > 0 || stats.todayOuttake > 0,
+      });
+    }
   };
 
   const saveWeight = async (date: string, weight: number) => {
@@ -1110,7 +1291,8 @@ function DashboardContent() {
         calendar={calendar}
         profile={profile}
         logs={logs}
-        onDayClick={setSelectedDay}
+        onDayClick={handleDayClick}
+        onTodayCardClick={handleTodayCardClick}
         onEntryConfirmed={handleEntryConfirmed}
       />
 
@@ -1121,57 +1303,135 @@ function DashboardContent() {
           calendar={calendar} 
           profile={profile} 
           logs={logs}
-          onDayClick={setSelectedDay} 
+          onDayClick={handleDayClick}
+          onTodayCardClick={handleTodayCardClick}
         />
       </div>
 
-      {/* Day Modal */}
-      <Dialog open={!!selectedDay} onOpenChange={() => setSelectedDay(null)}>
-        <DialogContent className="bg-card border-border">
-          <DialogHeader>
-            <DialogTitle className="font-display">
-              {selectedDay?.date && new Date(selectedDay.date).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+      {/* Day Detail Modal */}
+      <Dialog open={!!selectedDay} onOpenChange={() => { setSelectedDay(null); setDayEntries([]); }}>
+        <DialogContent className="bg-card border-border max-w-lg max-h-[85vh] overflow-hidden flex flex-col">
+          <DialogHeader className="shrink-0">
+            <DialogTitle className="font-display flex items-center gap-2">
+              {selectedDay?.isToday && <span className="pill pill-primary text-[10px]">Today</span>}
+              {selectedDay?.date && new Date(selectedDay.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
             </DialogTitle>
           </DialogHeader>
-          <div className="py-4 space-y-4">
-            <div className="space-y-2">
-              <Label>Weight (kg)</Label>
-              <Input
-                type="number"
-                step="0.1"
-                placeholder="75.0"
-                defaultValue={selectedDay?.weight || ""}
-                className="bg-background text-lg font-display"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && selectedDay) {
-                    saveWeight(selectedDay.date, parseFloat((e.target as HTMLInputElement).value));
-                  }
-                }}
-              />
-            </div>
-
+          
+          <div className="flex-1 overflow-y-auto py-4 space-y-4">
+            {/* Summary Stats */}
             {selectedDay?.hasData && (
-              <div className="space-y-2 pt-4 border-t border-border text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Balance</span>
-                  <span className={selectedDay.isSuccess ? "text-success" : "text-danger"}>
-                    {selectedDay.balance < 0 ? "" : "+"}{selectedDay.balance} kcal
-                  </span>
+              <div className="grid grid-cols-3 gap-3">
+                <div className={`p-3 rounded-lg ${selectedDay.isSuccess ? "bg-success/10 border border-success/20" : "bg-danger/10 border border-danger/20"}`}>
+                  <p className="text-[10px] uppercase text-muted-foreground mb-1">Balance</p>
+                  <p className={`font-display font-bold text-lg ${selectedDay.isSuccess ? "text-success" : "text-danger"}`}>
+                    {selectedDay.balance >= 0 ? "+" : ""}{selectedDay.balance}
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-secondary">
+                  <p className="text-[10px] uppercase text-muted-foreground mb-1">Protein</p>
+                  <p className="font-display font-bold text-lg text-foreground">{selectedDay.protein}g</p>
+                </div>
+                <div className="p-3 rounded-lg bg-secondary">
+                  <p className="text-[10px] uppercase text-muted-foreground mb-1">Weight</p>
+                  <p className="font-display font-bold text-lg text-foreground">{selectedDay.weight || "—"}</p>
                 </div>
               </div>
             )}
 
-            <Button
-              className="w-full bg-primary hover:bg-primary/90"
-              onClick={() => {
-                const input = document.querySelector('input[type="number"]') as HTMLInputElement;
-                if (input?.value && selectedDay) {
-                  saveWeight(selectedDay.date, parseFloat(input.value));
-                }
-              }}
-            >
-              Save
-            </Button>
+            {/* Food Entries */}
+            <div className="space-y-2">
+              <h4 className="font-display font-semibold text-foreground flex items-center gap-2">
+                <span className="text-lg">🍽️</span> Food
+              </h4>
+              {loadingEntries ? (
+                <div className="text-sm text-muted-foreground animate-pulse">Loading entries...</div>
+              ) : dayEntries.filter(e => e.entry_type === "food").length > 0 ? (
+                <div className="space-y-2">
+                  {dayEntries.filter(e => e.entry_type === "food").map((entry) => (
+                    <div key={entry.id} className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-foreground truncate">{entry.description}</p>
+                        <p className="text-[10px] text-muted-foreground">{formatTime(entry.created_at)}</p>
+                      </div>
+                      <div className="text-right shrink-0 ml-3">
+                        <p className="text-sm font-medium text-foreground">{entry.calories} cal</p>
+                        {entry.protein_grams > 0 && (
+                          <p className="text-[10px] text-muted-foreground">{entry.protein_grams}g protein</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  <div className="flex justify-between pt-2 text-sm font-medium border-t border-border">
+                    <span>Total Food</span>
+                    <span>{dayEntries.filter(e => e.entry_type === "food").reduce((sum, e) => sum + e.calories, 0)} cal</span>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No food logged</p>
+              )}
+            </div>
+
+            {/* Exercise Entries */}
+            <div className="space-y-2">
+              <h4 className="font-display font-semibold text-foreground flex items-center gap-2">
+                <span className="text-lg">🏃</span> Exercise
+              </h4>
+              {loadingEntries ? (
+                <div className="text-sm text-muted-foreground animate-pulse">Loading entries...</div>
+              ) : dayEntries.filter(e => e.entry_type === "exercise").length > 0 ? (
+                <div className="space-y-2">
+                  {dayEntries.filter(e => e.entry_type === "exercise").map((entry) => (
+                    <div key={entry.id} className="flex items-center justify-between p-3 bg-success/5 rounded-lg border border-success/10">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-foreground truncate">{entry.description}</p>
+                        <p className="text-[10px] text-muted-foreground">{formatTime(entry.created_at)}</p>
+                      </div>
+                      <div className="text-right shrink-0 ml-3">
+                        <p className="text-sm font-medium text-success">-{entry.calories} cal</p>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="flex justify-between pt-2 text-sm font-medium border-t border-border">
+                    <span>Total Burned</span>
+                    <span className="text-success">-{dayEntries.filter(e => e.entry_type === "exercise").reduce((sum, e) => sum + e.calories, 0)} cal</span>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No exercise logged</p>
+              )}
+            </div>
+
+            {/* Weight Input */}
+            <div className="space-y-2 pt-4 border-t border-border">
+              <Label className="text-muted-foreground">Log Weight (kg)</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="weight-input"
+                  type="number"
+                  step="0.1"
+                  placeholder="75.0"
+                  defaultValue={selectedDay?.weight || ""}
+                  className="bg-background text-lg font-display"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && selectedDay) {
+                      saveWeight(selectedDay.date, parseFloat((e.target as HTMLInputElement).value));
+                    }
+                  }}
+                />
+                <Button
+                  className="bg-primary hover:bg-primary/90 shrink-0"
+                  onClick={() => {
+                    const input = document.getElementById('weight-input') as HTMLInputElement;
+                    if (input?.value && selectedDay) {
+                      saveWeight(selectedDay.date, parseFloat(input.value));
+                    }
+                  }}
+                >
+                  Save
+                </Button>
+              </div>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
