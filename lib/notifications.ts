@@ -17,18 +17,26 @@ export async function logNotification(data: NotificationData): Promise<void> {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     
-    if (!user) return;
+    if (!user) {
+      console.log("[Notifications] No user found");
+      return;
+    }
 
-    await supabase.from("notifications").insert({
+    const { error } = await supabase.from("notifications").insert({
       user_id: user.id,
       type: data.type,
       title: data.title,
       message: data.message,
       metadata: data.metadata || {},
     });
+
+    if (error) {
+      console.error("[Notifications] Error inserting:", error.message);
+    } else {
+      console.log("[Notifications] ✅ Logged:", data.type, data.title);
+    }
   } catch (error) {
-    // Silently fail if notifications table doesn't exist
-    console.log("Notification logging skipped:", error);
+    console.error("[Notifications] Exception:", error);
   }
 }
 

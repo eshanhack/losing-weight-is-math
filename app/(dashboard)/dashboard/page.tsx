@@ -1205,7 +1205,7 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
                 const foodName = edit.search_term.toLowerCase().trim();
                 
                 // Upsert to user_food_memory (update if exists, insert if new)
-                await supabase
+                const { error: memoryError } = await supabase
                   .from("user_food_memory")
                   .upsert({
                     user_id: user.id,
@@ -1217,6 +1217,12 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
                   }, {
                     onConflict: "user_id,food_name",
                   });
+                
+                if (memoryError) {
+                  console.error("[Food Memory] Error saving:", memoryError.message);
+                } else {
+                  console.log("[Food Memory] ✅ Saved:", foodName, perUnitCalories, "cal,", perUnitProtein, "g protein");
+                }
               }
             }
           }
@@ -1468,7 +1474,7 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
               // Save to user's food memory for future use
               if (edit.updates?.calories !== undefined || edit.updates?.protein !== undefined) {
                 const foodName = edit.search_term.toLowerCase().trim();
-                await supabase
+                const { error: memError } = await supabase
                   .from("user_food_memory")
                   .upsert({
                     user_id: user.id,
@@ -1480,6 +1486,12 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
                   }, {
                     onConflict: "user_id,food_name",
                   });
+                
+                if (memError) {
+                  console.error("[Food Memory] Error:", memError.message);
+                } else {
+                  console.log("[Food Memory] ✅ Remembered:", foodName);
+                }
               }
             }
           }
