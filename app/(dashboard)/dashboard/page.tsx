@@ -500,6 +500,7 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [weightReminderShown, setWeightReminderShown] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { showToast } = useToast();
   
@@ -508,11 +509,49 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
 
   useEffect(() => {
     loadChatHistory();
+    checkWeightReminder();
   }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Check if we should remind user to log their weight
+  const checkWeightReminder = async () => {
+    // Only check if it's past 9am local time
+    const now = new Date();
+    const currentHour = now.getHours();
+    if (currentHour < 9) return;
+
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // Check if weight has been logged today
+    const { data: todayLog } = await supabase
+      .from("daily_logs")
+      .select("weight_kg")
+      .eq("user_id", user.id)
+      .eq("log_date", today)
+      .single();
+
+    // If no weight logged today and we haven't shown the reminder yet
+    if ((!todayLog || todayLog.weight_kg === null) && !weightReminderShown) {
+      setWeightReminderShown(true);
+      // Add reminder message after a short delay so it appears after welcome
+      setTimeout(() => {
+        setMessages(prev => [
+          ...prev,
+          {
+            id: "weight-reminder-" + Date.now(),
+            role: "assistant",
+            content: "⚖️ Good morning! Have you weighed yourself today? Just tell me your weight (e.g., \"I weigh 82kg\" or \"weight 80.5\") and I'll log it for you!",
+            timestamp: new Date().toISOString(),
+          }
+        ]);
+      }, 1500);
+    }
+  };
 
   const loadChatHistory = async () => {
     const supabase = createClient();
