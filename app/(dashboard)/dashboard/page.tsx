@@ -919,19 +919,18 @@ function generateCheatMealImpact(ctx: CheatMealContext): string {
 function generateActivitySuggestions(caloriesToBurn: number): string {
   // Activity calories burned estimates (per minute, average adult)
   const activities = [
-    { name: "Walking", emoji: "🚶", calPerMin: 4, description: "casual pace, 3 mph" },
-    { name: "Brisk walking", emoji: "🚶‍♂️", calPerMin: 5.5, description: "fast pace, 4 mph" },
-    { name: "Jogging", emoji: "🏃", calPerMin: 9, description: "light jog, 5 mph" },
-    { name: "Running", emoji: "🏃‍♂️", calPerMin: 12, description: "moderate pace, 6-7 mph" },
-    { name: "Cycling", emoji: "🚴", calPerMin: 8, description: "moderate effort" },
-    { name: "Swimming", emoji: "🏊", calPerMin: 10, description: "moderate laps" },
-    { name: "HIIT workout", emoji: "💪", calPerMin: 14, description: "high intensity intervals" },
-    { name: "Jump rope", emoji: "⏱️", calPerMin: 12, description: "moderate pace" },
-    { name: "Dancing", emoji: "💃", calPerMin: 7, description: "active dancing" },
-    { name: "Stair climbing", emoji: "🪜", calPerMin: 9, description: "climbing stairs" },
+    { name: "Walking", emoji: "🚶", calPerMin: 4 },
+    { name: "Brisk walk", emoji: "🚶‍♂️", calPerMin: 5.5 },
+    { name: "Jogging", emoji: "🏃", calPerMin: 9 },
+    { name: "Running", emoji: "🏃‍♂️", calPerMin: 12 },
+    { name: "Cycling", emoji: "🚴", calPerMin: 8 },
+    { name: "Swimming", emoji: "🏊", calPerMin: 10 },
+    { name: "HIIT", emoji: "💪", calPerMin: 14 },
+    { name: "Jump rope", emoji: "⏱️", calPerMin: 12 },
+    { name: "Dancing", emoji: "💃", calPerMin: 7 },
   ];
 
-  let message = `🔥 **Ways to burn ${caloriesToBurn} calories:**\n\n`;
+  let message = `🔥 **To burn ${caloriesToBurn} calories:**\n\n`;
 
   // Generate suggestions for each activity
   const suggestions: string[] = [];
@@ -947,23 +946,23 @@ function generateActivitySuggestions(caloriesToBurn: number): string {
         ? (mins > 0 ? `${hours}h ${mins}min` : `${hours}h`)
         : `${minutes} min`;
       
-      suggestions.push(`${activity.emoji} **${activity.name}** — ${timeStr}\n   _${activity.description}_`);
+      suggestions.push(`${activity.emoji} ${activity.name} → **${timeStr}**`);
     }
   }
 
-  message += suggestions.slice(0, 6).join("\n\n");
+  message += suggestions.slice(0, 6).join("\n");
 
-  // Add helpful tips based on calorie amount
-  message += "\n\n━━━━━━━━━━━━━━━━━━━━━━\n";
+  // Add helpful tip based on calorie amount
+  message += "\n\n";
   
   if (caloriesToBurn <= 150) {
-    message += "💡 **Tip:** This is easily achievable with a short walk! Even taking the stairs or parking farther away adds up.";
+    message += "💡 Easy! A short walk or taking stairs would do it.";
   } else if (caloriesToBurn <= 300) {
-    message += "💡 **Tip:** A 30-45 min walk or 20 min jog would do it. Consider breaking it into two shorter sessions!";
+    message += "💡 A 30-45 min walk or quick jog. Try splitting into two sessions!";
   } else if (caloriesToBurn <= 500) {
-    message += "💡 **Tip:** This is a solid workout! Combine activities—like a 20 min walk + 15 min HIIT—to make it more enjoyable.";
+    message += "💡 Solid workout! Mix activities to make it fun.";
   } else {
-    message += "💡 **Tip:** This is a big burn! Consider spreading it across the day or combining eating less with exercise.";
+    message += "💡 Big goal! Spread across the day or combine with eating less.";
   }
 
   return message;
@@ -984,12 +983,16 @@ interface SavedMealLocal {
   total_protein: number;
 }
 
-// Helper to render markdown-style bold text (**text**)
+// Helper to render markdown-style text (**bold** and _italic_)
 function renderMarkdown(text: string): React.ReactNode {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  // Split by bold (**text**) and italic (_text_) patterns
+  const parts = text.split(/(\*\*[^*]+\*\*|_[^_]+_)/g);
   return parts.map((part, index) => {
     if (part.startsWith("**") && part.endsWith("**")) {
       return <strong key={index}>{part.slice(2, -2)}</strong>;
+    }
+    if (part.startsWith("_") && part.endsWith("_") && part.length > 2) {
+      return <span key={index} className="text-muted-foreground text-[11px]">{part.slice(1, -1)}</span>;
     }
     return part;
   });
