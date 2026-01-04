@@ -305,19 +305,31 @@ function DashboardStats({
               </button>
             </div>
             <h3 className="font-display font-semibold text-foreground mb-1">Real Weight</h3>
-            <div className="flex items-baseline gap-2 mb-3">
+            <div className="flex items-baseline gap-2 mb-1">
               <span className="font-display text-2xl lg:text-3xl font-bold text-foreground">
                 {stats.realWeight?.toFixed(1) || "—"}
               </span>
               <span className="text-sm text-muted-foreground">kg</span>
+              {stats.realWeightChange !== null && stats.realWeightChange !== 0 && (
+                <span className={`text-sm font-medium ${stats.realWeightChange < 0 ? "text-success" : "text-danger"}`}>
+                  {stats.realWeightChange > 0 ? "+" : ""}{stats.realWeightChange} kg
+                </span>
+              )}
             </div>
-            <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-              <span>7-day average</span>
-              {profile?.goal_weight_kg && (
-                <>
-                  <span>•</span>
-                  <span>Goal: {profile.goal_weight_kg}kg</span>
-                </>
+            <div className="mt-2 flex flex-col gap-1 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <span>📊 7-day average</span>
+                {profile?.goal_weight_kg && (
+                  <>
+                    <span>•</span>
+                    <span>🎯 Goal: {profile.goal_weight_kg}kg</span>
+                  </>
+                )}
+              </div>
+              {profile?.starting_weight_kg && (
+                <span className="text-muted-foreground/70">
+                  Started at {profile.starting_weight_kg}kg
+                </span>
               )}
             </div>
           </Card>
@@ -1234,7 +1246,18 @@ function DashboardContent() {
       date: new Date(l.log_date),
       weight: l.weight_kg!,
     }));
-    const realWeight = calculateRealWeight(weights);
+    const calculatedRealWeight = calculateRealWeight(weights);
+    
+    // If no weights logged yet, use starting weight from profile
+    // Otherwise use the 7-day average
+    const realWeight = calculatedRealWeight !== null 
+      ? calculatedRealWeight 
+      : (profile.current_weight_kg || profile.starting_weight_kg);
+
+    // Calculate weight change from starting weight
+    const realWeightChange = realWeight 
+      ? Math.round((realWeight - profile.starting_weight_kg) * 10) / 10
+      : null;
 
     const prediction = predictWeight30Days(
       realWeight || profile.starting_weight_kg,
@@ -1259,7 +1282,7 @@ function DashboardContent() {
       sevenDayBalance: sevenDay.total,
       sevenDayAverage: sevenDay.average,
       realWeight,
-      realWeightChange: null,
+      realWeightChange,
       predictedWeight: prediction.predictedWeight,
       predictedChange: prediction.predictedChange,
       streak,
