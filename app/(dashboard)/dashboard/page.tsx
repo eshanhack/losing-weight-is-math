@@ -1335,8 +1335,8 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
                 >
                   <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
 
-                  {/* Only show parsed data UI if it's NOT an error */}
-                  {message.parsedData && !message.confirmed && !message.parsedData.is_error && (
+                  {/* Only show parsed data UI if it's NOT an error and NOT a chat message */}
+                  {message.parsedData && !message.confirmed && !message.parsedData.is_error && message.parsedData.type !== "chat" && (
                     <div className="mt-3 pt-3 border-t border-white/10">
                       {/* For EDIT operations */}
                       {message.parsedData.type === "edit" && message.parsedData.search_term && (
