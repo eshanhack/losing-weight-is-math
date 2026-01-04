@@ -87,6 +87,7 @@ interface CalendarDay {
   date: string;
   dayOfMonth: number;
   weight: number | null;
+  weightChange: number | null; // Difference from previous day
   balance: number;
   protein: number;
   isSuccess: boolean;
@@ -453,9 +454,16 @@ function DashboardStats({
                 } ${day.isToday ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}
               >
                 <span className="font-bold text-base text-foreground">{day.date && day.dayOfMonth}</span>
-                {/* Show weight if logged */}
+                {/* Show weight if logged with change from yesterday */}
                 {day.weight && (
-                  <span className="text-[10px] text-blue-400 font-medium">{day.weight}kg</span>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-blue-400 font-medium">{day.weight}kg</span>
+                    {day.weightChange !== null && day.weightChange !== 0 && (
+                      <span className={`text-[9px] font-semibold ${day.weightChange < 0 ? "text-success" : "text-danger"}`}>
+                        {day.weightChange > 0 ? "+" : ""}{day.weightChange}
+                      </span>
+                    )}
+                  </div>
                 )}
                 {day.hasData && (
                   <div className="flex flex-col items-center mt-0.5 gap-0.5">
@@ -539,9 +547,24 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
       .eq("log_date", today)
       .single();
 
+    // Only show reminder if NO weight logged today
+    if (todayLog && todayLog.weight_kg !== null) {
+      // Weight already logged, don't show reminder
+      return;
+    }
+
     // If no weight logged today and we haven't shown the reminder yet
-    if ((!todayLog || todayLog.weight_kg === null) && !weightReminderShown) {
+    if (!weightReminderShown) {
       setWeightReminderShown(true);
+      
+      // Get appropriate greeting based on time of day
+      let greeting = "Good morning";
+      if (currentHour >= 12 && currentHour < 17) {
+        greeting = "Good afternoon";
+      } else if (currentHour >= 17) {
+        greeting = "Good evening";
+      }
+      
       // Add reminder message after a short delay so it appears after welcome
       setTimeout(() => {
         setMessages(prev => [
@@ -549,7 +572,7 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
           {
             id: "weight-reminder-" + Date.now(),
             role: "assistant",
-            content: "⚖️ Good morning! Have you weighed yourself today? Just tell me your weight (e.g., \"I weigh 82kg\" or \"weight 80.5\") and I'll log it for you!",
+            content: `⚖️ ${greeting}! Have you weighed yourself today? Just tell me your weight (e.g., "I weigh 82kg" or "weight 80.5") and I'll log it for you!`,
             timestamp: new Date().toISOString(),
           }
         ]);
@@ -1398,7 +1421,21 @@ function DashboardContent() {
     const calendarDays: CalendarDay[] = [];
 
     for (let i = 0; i < startDayOfWeek; i++) {
-      calendarDays.push({ date: "", dayOfMonth: 0, weight: null, balance: 0, protein: 0, isSuccess: false, isLocked: false, isFuture: true, isToday: false, hasData: false });
+      calendarDays.push({ date: "", dayOfMonth: 0, weight: null, weightChange: null, balance: 0, protein: 0, isSuccess: false, isLocked: false, isFuture: true, isToday: false, hasData: false });
+    }
+
+    // First pass: collect all weights for the month
+    const dayWeights: { [dateStr: string]: number | null } = {};
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(currentYear, currentMonth, day);
+      const dateStr = getLocalDateString(date);
+      const log = logs.find((l) => l.log_date === dateStr);
+      let weight = log?.weight_kg || null;
+      // Show starting weight on signup day if no weight logged yet
+      if (!weight && dateStr === signupDate && startingWeight) {
+        weight = startingWeight;
+      }
+      dayWeights[dateStr] = weight;
     }
 
     for (let day = 1; day <= daysInMonth; day++) {
@@ -1418,16 +1455,25 @@ function DashboardContent() {
       // e.g., -1100 <= -1000 means you exceeded your 1000 cal deficit goal
       const isSuccess = log ? balance <= goalDeficit : false;
       
-      // Show starting weight on signup day if no weight logged yet
-      let weight = log?.weight_kg || null;
-      if (!weight && dateStr === signupDate && startingWeight) {
-        weight = startingWeight;
+      const weight = dayWeights[dateStr];
+      
+      // Calculate weight change from previous day
+      let weightChange: number | null = null;
+      if (weight !== null && day > 1) {
+        // Look for previous day's weight
+        const prevDate = new Date(currentYear, currentMonth, day - 1);
+        const prevDateStr = getLocalDateString(prevDate);
+        const prevWeight = dayWeights[prevDateStr];
+        if (prevWeight !== null) {
+          weightChange = Math.round((weight - prevWeight) * 10) / 10;
+        }
       }
 
       calendarDays.push({
         date: dateStr,
         dayOfMonth: day,
         weight,
+        weightChange,
         balance,
         protein,
         isSuccess,
@@ -1512,6 +1558,7 @@ function DashboardContent() {
         date: todayStr,
         dayOfMonth: new Date().getDate(),
         weight: null,
+        weightChange: null,
         balance: stats.todayBalance,
         protein: stats.todayProtein,
         isSuccess: stats.todayBalance <= stats.goalDeficit,
