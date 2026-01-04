@@ -507,7 +507,7 @@ function DashboardStats({
 // AI DIARY COMPONENT
 // ============================================================================
 
-function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
+function AIDiary({ onEntryConfirmed, todayHasWeight }: { onEntryConfirmed: () => void; todayHasWeight: boolean }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -521,35 +521,26 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
 
   useEffect(() => {
     loadChatHistory();
-    checkWeightReminder();
   }, []);
+  
+  // Check weight reminder when todayHasWeight prop changes
+  useEffect(() => {
+    checkWeightReminder();
+  }, [todayHasWeight]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   // Check if we should remind user to log their weight
-  const checkWeightReminder = async () => {
+  const checkWeightReminder = () => {
     // Only check if it's past 9am local time
     const now = new Date();
     const currentHour = now.getHours();
     if (currentHour < 9) return;
 
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    // Check if weight has been logged today
-    const { data: todayLog } = await supabase
-      .from("daily_logs")
-      .select("weight_kg")
-      .eq("user_id", user.id)
-      .eq("log_date", today)
-      .single();
-
-    // Only show reminder if NO weight logged today
-    if (todayLog && todayLog.weight_kg !== null) {
-      // Weight already logged, don't show reminder
+    // If weight is already logged today, don't show reminder
+    if (todayHasWeight) {
       return;
     }
 
@@ -1179,6 +1170,7 @@ function ResizableSplitView({
   onTodayCardClick,
   onRealWeightCardClick,
   onEntryConfirmed,
+  todayHasWeight,
 }: {
   stats: {
     todayBalance: number;
@@ -1203,6 +1195,7 @@ function ResizableSplitView({
   onTodayCardClick: () => void;
   onRealWeightCardClick: () => void;
   onEntryConfirmed: () => void;
+  todayHasWeight: boolean;
 }) {
   const { width: diaryWidth, isResizing, startResizing } = useResizable(380, 280, 600);
 
@@ -1244,7 +1237,7 @@ function ResizableSplitView({
           userSelect: isResizing ? "none" : "auto"
         }}
       >
-        <AIDiary onEntryConfirmed={onEntryConfirmed} />
+        <AIDiary onEntryConfirmed={onEntryConfirmed} todayHasWeight={todayHasWeight} />
       </div>
     </div>
   );
@@ -1270,6 +1263,11 @@ function DashboardContent() {
   const [editForm, setEditForm] = useState({ description: "", calories: 0, protein: 0 });
   const [showWeightModal, setShowWeightModal] = useState(false);
   const [weightInput, setWeightInput] = useState("");
+  
+  // Check if today has weight logged (derived from logs)
+  const todayStr = getLocalDateString();
+  const todayLog = logs.find(l => l.log_date === todayStr);
+  const todayHasWeight = todayLog?.weight_kg !== null && todayLog?.weight_kg !== undefined;
 
   const [stats, setStats] = useState({
     todayBalance: 0,
@@ -1783,6 +1781,7 @@ function DashboardContent() {
         onTodayCardClick={handleTodayCardClick}
         onRealWeightCardClick={handleRealWeightCardClick}
         onEntryConfirmed={handleEntryConfirmed}
+        todayHasWeight={todayHasWeight}
       />
 
       {/* Mobile: Just dashboard (diary is separate tab) */}
