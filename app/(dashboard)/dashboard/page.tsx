@@ -275,24 +275,31 @@ function DashboardStats({
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15 }}
         >
-          <Card className="p-3 lg:p-4 bg-card border-border h-full card-hover">
+          <Card className={`p-3 lg:p-4 bg-card border-border h-full card-hover ${
+            stats.sevenDayBalance <= stats.goalDeficit * 7 ? "border-success/30" :
+            stats.sevenDayBalance < 0 ? "border-gold/30" : "border-danger/30"
+          }`}>
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-xs font-medium text-muted-foreground">Weekly Balance</h3>
-              <span className="text-[10px] text-muted-foreground">7 days</span>
             </div>
             <div className="flex items-end gap-2 mb-2">
               <span className={`font-display text-2xl font-bold leading-none ${
-                formattedSevenDay.color === "success" ? "text-success" : formattedSevenDay.color === "danger" ? "text-danger" : "text-foreground"
+                stats.sevenDayBalance <= stats.goalDeficit * 7 ? "text-success" :
+                stats.sevenDayBalance < 0 ? "text-gold" : "text-danger"
               }`}>
                 {formattedSevenDay.text}
               </span>
-              <span className="text-xs text-muted-foreground pb-0.5">kcal</span>
+              <span className="text-xs text-muted-foreground pb-0.5">/ {(stats.goalDeficit * 7).toLocaleString()}</span>
             </div>
             <div className="text-[10px] text-muted-foreground">
               <span>Avg: </span>
-              <span className={formattedSevenDay.isDeficit ? "text-success" : "text-danger"}>
-                {stats.sevenDayAverage < 0 ? "" : "+"}{stats.sevenDayAverage}/day
+              <span className={
+                stats.sevenDayAverage <= stats.goalDeficit ? "text-success" :
+                stats.sevenDayAverage < 0 ? "text-gold" : "text-danger"
+              }>
+                {stats.sevenDayAverage < 0 ? "" : "+"}{stats.sevenDayAverage}
               </span>
+              <span className="text-muted-foreground"> / {stats.goalDeficit}/day</span>
             </div>
           </Card>
         </motion.div>
