@@ -195,7 +195,7 @@ function DashboardStats({
         <div className="flex-1 max-w-md hidden sm:block">
           <div className="flex items-center justify-between mb-1">
             <span className="text-xs text-muted-foreground flex items-center gap-1">
-              🥩 Protein
+              🥩 Today's Protein Goal
             </span>
             <span className="text-xs font-medium">
               <span className={proteinProgress >= 100 ? "text-success" : "text-foreground"}>{stats.todayProtein}g</span>
@@ -206,8 +206,8 @@ function DashboardStats({
         </div>
       </div>
 
-      {/* Stat Cards - FitFuel style */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 lg:gap-4">
+      {/* Stat Cards - Compact style */}
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-2 lg:gap-3">
         {/* Card 1: Today's Balance - Clickable to see breakdown */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
@@ -216,88 +216,35 @@ function DashboardStats({
         >
           <Card 
             onClick={onTodayCardClick}
-            className={`p-4 lg:p-5 bg-card border-border h-full card-hover cursor-pointer ${
+            className={`p-3 lg:p-4 bg-card border-border h-full card-hover cursor-pointer ${
               formattedBalance.color === "success" ? "border-success/30" : 
               formattedBalance.color === "warning" ? "border-gold/30" : 
               formattedBalance.color === "danger" ? "border-danger/30" : ""
             }`}>
-            <div className="flex items-start justify-between mb-3">
-              <div className={`icon-container ${
-                formattedBalance.color === "success" ? "bg-success/10" : 
-                formattedBalance.color === "warning" ? "bg-gold/10" : 
-                formattedBalance.color === "danger" ? "bg-danger/10" : "bg-primary/10"
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xs font-medium text-muted-foreground">Today's Balance</h3>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                formattedBalance.toGoal <= 0 ? "bg-success/20 text-success" : 
+                formattedBalance.toGoal <= 300 ? "bg-gold/20 text-gold" : "bg-secondary text-muted-foreground"
               }`}>
-                <span className="text-lg">📊</span>
-              </div>
-              {/* Top right: Goal & Maintenance action indicators */}
-              <div className="flex flex-col items-end gap-1">
-                {/* To Goal indicator */}
-                {formattedBalance.toGoal > 0 ? (
-                  // Behind goal: need to burn more
-                  <div className="flex items-center gap-1 text-xs">
-                    <span className="text-muted-foreground">Burn</span>
-                    <span className="text-success font-semibold">{formattedBalance.toGoal.toLocaleString()}</span>
-                    <span className="text-muted-foreground">for goal</span>
-                  </div>
-                ) : formattedBalance.toGoal === 0 ? (
-                  // Exactly at goal
-                  <div className="flex items-center gap-1 text-xs">
-                    <span className="text-success font-semibold">✓ At goal!</span>
-                  </div>
-                ) : (
-                  // Exceeded goal: can eat more
-                  <div className="flex items-center gap-1 text-xs">
-                    <span className="text-muted-foreground">Can eat</span>
-                    <span className="text-success font-semibold">{Math.abs(formattedBalance.toGoal).toLocaleString()}</span>
-                    <span className="text-muted-foreground">more</span>
-                  </div>
-                )}
-                {/* To Maintenance indicator */}
-                {stats.todayBalance > 0 ? (
-                  // In surplus: need to burn to get back
-                  <div className="flex items-center gap-1 text-[10px]">
-                    <span className="text-muted-foreground/70">Burn</span>
-                    <span className="text-gold font-medium">{stats.todayBalance.toLocaleString()}</span>
-                    <span className="text-muted-foreground/70">for maint.</span>
-                  </div>
-                ) : stats.todayBalance === 0 ? (
-                  // At maintenance exactly
-                  <div className="flex items-center gap-1 text-[10px]">
-                    <span className="text-muted-foreground/70">At maintenance</span>
-                  </div>
-                ) : (
-                  // In deficit: can eat more before maintenance
-                  <div className="flex items-center gap-1 text-[10px]">
-                    <span className="text-muted-foreground/70">Can eat</span>
-                    <span className="text-muted-foreground font-medium">{Math.abs(stats.todayBalance).toLocaleString()}</span>
-                    <span className="text-muted-foreground/70">before maint.</span>
-                  </div>
-                )}
-              </div>
+                {formattedBalance.toGoal <= 0 ? "✓ Goal" : `${formattedBalance.toGoal} to go`}
+              </span>
             </div>
-            <h3 className="font-display font-semibold text-foreground mb-0.5">Today's Balance</h3>
-            <div className="flex items-baseline gap-2">
-              <span className={`font-display text-2xl lg:text-3xl font-bold ${
+            {/* Main value with goal indicator */}
+            <div className="flex items-end gap-2 mb-2">
+              <span className={`font-display text-2xl font-bold leading-none ${
                 formattedBalance.color === "success" ? "text-success" : 
                 formattedBalance.color === "warning" ? "text-gold" : 
                 formattedBalance.color === "danger" ? "text-danger" : "text-foreground"
               }`}>
                 {formattedBalance.text}
               </span>
-              <span className="text-sm text-muted-foreground">kcal</span>
+              <span className="text-xs text-muted-foreground pb-0.5">/ {stats.goalDeficit.toLocaleString()}</span>
             </div>
-            <p className="text-xs text-muted-foreground mb-2">
-              Goal: {stats.goalDeficit.toLocaleString()} kcal
-            </p>
-            <div className="mt-2 space-y-1 text-xs text-muted-foreground">
-              <div className="flex justify-between">
-                <span>Eaten</span>
-                <span>{stats.todayIntake.toLocaleString()} kcal</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Burned</span>
-                <span className="text-success">+{stats.todayOuttake.toLocaleString()} kcal</span>
-              </div>
+            {/* Compact stats */}
+            <div className="flex gap-3 text-[10px] text-muted-foreground">
+              <span>🍽️ {stats.todayIntake.toLocaleString()}</span>
+              <span className="text-success">🔥 +{stats.todayOuttake.toLocaleString()}</span>
             </div>
           </Card>
         </motion.div>
@@ -308,33 +255,24 @@ function DashboardStats({
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15 }}
         >
-          <Card className="p-4 lg:p-5 bg-card border-border h-full card-hover">
-            <div className="flex items-start justify-between mb-3">
-              <div className={`icon-container ${formattedSevenDay.isDeficit ? "bg-success/10" : "bg-primary/10"}`}>
-                <span className="text-lg">📈</span>
-              </div>
-              <button className="text-muted-foreground hover:text-foreground">
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M6 10a2 2 0 11-4 0 2 2 0 014 0zM12 10a2 2 0 11-4 0 2 2 0 014 0zM16 12a2 2 0 100-4 2 2 0 000 4z" />
-                </svg>
-              </button>
+          <Card className="p-3 lg:p-4 bg-card border-border h-full card-hover">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xs font-medium text-muted-foreground">Weekly Balance</h3>
+              <span className="text-[10px] text-muted-foreground">7 days</span>
             </div>
-            <h3 className="font-display font-semibold text-foreground mb-0.5">Weekly Balance</h3>
-            <div className="flex items-baseline gap-2">
-              <span className={`font-display text-2xl lg:text-3xl font-bold ${
+            <div className="flex items-end gap-2 mb-2">
+              <span className={`font-display text-2xl font-bold leading-none ${
                 formattedSevenDay.color === "success" ? "text-success" : formattedSevenDay.color === "danger" ? "text-danger" : "text-foreground"
               }`}>
                 {formattedSevenDay.text}
               </span>
-              <span className="text-sm text-muted-foreground">kcal</span>
+              <span className="text-xs text-muted-foreground pb-0.5">kcal</span>
             </div>
-            <div className="mt-auto pt-3 space-y-1 text-xs text-muted-foreground">
-              <div className="flex justify-between">
-                <span>Daily avg</span>
-                <span className={formattedSevenDay.isDeficit ? "text-success" : "text-danger"}>
-                  {stats.sevenDayAverage < 0 ? "" : "+"}{stats.sevenDayAverage}/day
-                </span>
-              </div>
+            <div className="text-[10px] text-muted-foreground">
+              <span>Avg: </span>
+              <span className={formattedSevenDay.isDeficit ? "text-success" : "text-danger"}>
+                {stats.sevenDayAverage < 0 ? "" : "+"}{stats.sevenDayAverage}/day
+              </span>
             </div>
           </Card>
         </motion.div>
@@ -346,38 +284,29 @@ function DashboardStats({
           transition={{ delay: 0.2 }}
         >
           <Card 
-            className="p-4 lg:p-5 bg-card border-border h-full card-hover cursor-pointer hover:border-primary/50 transition-colors"
+            className="p-3 lg:p-4 bg-card border-border h-full card-hover cursor-pointer hover:border-primary/50 transition-colors"
             onClick={onRealWeightCardClick}
           >
-            <div className="flex items-start justify-between mb-3">
-              <div className="icon-container bg-primary/10">
-                <span className="text-lg">⚖️</span>
-              </div>
-              <span className="text-[10px] text-primary font-medium px-2 py-0.5 bg-primary/10 rounded-full">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xs font-medium text-muted-foreground">Real Weight</h3>
+              <span className="text-[10px] text-primary font-medium px-1.5 py-0.5 bg-primary/10 rounded">
                 Tap to log
               </span>
             </div>
-            <h3 className="font-display font-semibold text-foreground mb-0.5">Real Weight</h3>
-            <div className="flex items-baseline gap-2">
-              <span className="font-display text-2xl lg:text-3xl font-bold text-foreground">
+            <div className="flex items-end gap-2 mb-2">
+              <span className="font-display text-2xl font-bold leading-none text-foreground">
                 {stats.realWeight?.toFixed(1) || "—"}
               </span>
-              <span className="text-sm text-muted-foreground">kg</span>
+              <span className="text-xs text-muted-foreground pb-0.5">kg</span>
               {stats.realWeightChange !== null && stats.realWeightChange !== 0 && (
-                <span className={`text-sm font-medium ${stats.realWeightChange < 0 ? "text-success" : "text-danger"}`}>
+                <span className={`text-xs font-medium pb-0.5 ${stats.realWeightChange < 0 ? "text-success" : "text-danger"}`}>
                   {stats.realWeightChange > 0 ? "+" : ""}{stats.realWeightChange}
                 </span>
               )}
             </div>
-            <div className="mt-auto pt-3 space-y-1 text-xs text-muted-foreground">
-              <div className="flex justify-between">
-                <span>Goal</span>
-                <span>{profile?.goal_weight_kg || "—"} kg</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Started</span>
-                <span>{profile?.starting_weight_kg || "—"} kg</span>
-              </div>
+            <div className="flex gap-3 text-[10px] text-muted-foreground">
+              <span>🎯 {profile?.goal_weight_kg || "—"}kg</span>
+              <span>📍 {profile?.starting_weight_kg || "—"}kg</span>
             </div>
           </Card>
         </motion.div>
@@ -388,33 +317,19 @@ function DashboardStats({
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.25 }}
         >
-          <Card className="p-4 lg:p-5 bg-card border-border border-gold/20 h-full card-hover">
-            <div className="flex items-start justify-between mb-3">
-              <div className="icon-container bg-gold/10">
-                <span className="text-lg">🔥</span>
-              </div>
-              <button className="text-muted-foreground hover:text-foreground">
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M6 10a2 2 0 11-4 0 2 2 0 014 0zM12 10a2 2 0 11-4 0 2 2 0 014 0zM16 12a2 2 0 100-4 2 2 0 000 4z" />
-                </svg>
-              </button>
+          <Card className="p-3 lg:p-4 bg-card border-border border-gold/20 h-full card-hover">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xs font-medium text-muted-foreground">Current Streak</h3>
+              <span className="text-[10px]">{stats.streak > 0 ? "🔥" : "💤"}</span>
             </div>
-            <h3 className="font-display font-semibold text-foreground mb-0.5">Current Streak</h3>
-            <div className="flex items-baseline gap-2">
-              <span className="font-display text-2xl lg:text-3xl font-bold text-gold">
+            <div className="flex items-end gap-2 mb-2">
+              <span className="font-display text-2xl font-bold leading-none text-gold">
                 {stats.streak}
               </span>
-              <span className="text-sm text-muted-foreground">days</span>
+              <span className="text-xs text-muted-foreground pb-0.5">days</span>
             </div>
-            <div className="mt-auto pt-3 space-y-1 text-xs text-muted-foreground">
-              <div className="flex justify-between">
-                <span>Best streak</span>
-                <span className="text-gold">{stats.streak} days</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Status</span>
-                <span>{stats.streak > 0 ? "🔥 On fire!" : "Start today!"}</span>
-              </div>
+            <div className="text-[10px] text-muted-foreground">
+              {stats.streak > 0 ? "Keep it going! 💪" : "Start your streak today!"}
             </div>
           </Card>
         </motion.div>
