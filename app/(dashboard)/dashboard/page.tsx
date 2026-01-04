@@ -2526,7 +2526,7 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
                 ? "Upgrade to continue..." 
                 : pendingSaveMeal 
                   ? "Enter a name (e.g., breakfast)..." 
-                  : "What did you eat? Try @meal or /create name..."
+                  : "What did you eat? What exercise did you do?"
             }
             rows={1}
             className={`flex-1 min-h-10 max-h-32 px-4 py-2.5 text-sm bg-secondary border-0 rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none ${
@@ -2551,7 +2551,7 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
           </Button>
         </form>
         <p className="text-[10px] text-muted-foreground mt-1.5 text-center">
-          Type <span className="text-primary">@</span> for saved meals • <span className="text-primary">/create</span> to save new
+          Type <span className="text-primary">@</span> for saved meals • <span className="text-primary">/create</span> [meal name] [content of meal]
         </p>
       </div>
     </div>
