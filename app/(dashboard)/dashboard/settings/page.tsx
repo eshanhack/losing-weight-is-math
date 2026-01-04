@@ -50,7 +50,7 @@ export default function SettingsPage() {
         height_cm: profile.height_cm,
         current_weight_kg: profile.current_weight_kg,
         goal_weight_kg: profile.goal_weight_kg,
-        target_date: profile.target_date,
+        goal_date: profile.goal_date,
         activity_level: profile.activity_level,
         gender: profile.gender,
       })
@@ -151,7 +151,7 @@ export default function SettingsPage() {
               <Label>Gender</Label>
               <Select
                 value={profile.gender || ""}
-                onValueChange={(v) => setProfile({ ...profile, gender: v })}
+                onValueChange={(v) => setProfile({ ...profile, gender: v as "male" | "female" | "other" })}
               >
                 <SelectTrigger className="bg-background">
                   <SelectValue placeholder="Select gender" />
@@ -210,12 +210,12 @@ export default function SettingsPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Target Date</Label>
+                <Label>Goal Date</Label>
                 <Input
                   type="date"
-                  value={profile.target_date || ""}
+                  value={profile.goal_date || ""}
                   onChange={(e) =>
-                    setProfile({ ...profile, target_date: e.target.value })
+                    setProfile({ ...profile, goal_date: e.target.value })
                   }
                   className="bg-background"
                 />
@@ -226,7 +226,7 @@ export default function SettingsPage() {
               <Label>Activity Level</Label>
               <Select
                 value={profile.activity_level || ""}
-                onValueChange={(v) => setProfile({ ...profile, activity_level: v })}
+                onValueChange={(v) => setProfile({ ...profile, activity_level: v as "sedentary" | "light" | "moderate" | "active" | "very_active" })}
               >
                 <SelectTrigger className="bg-background">
                   <SelectValue placeholder="Select activity level" />

@@ -1,7 +1,3 @@
 {
-  "rewrites": [
-    { "source": "/dashboard/diary", "destination": "/(dashboard)/dashboard/diary" },
-    { "source": "/dashboard/settings", "destination": "/(dashboard)/dashboard/settings" },
-    { "source": "/dashboard/subscribe", "destination": "/(dashboard)/dashboard/subscribe" }
-  ]
+  "framework": "nextjs"
 }

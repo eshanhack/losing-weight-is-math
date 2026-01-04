@@ -307,7 +307,7 @@ export default function MobileDiaryPage() {
                       ))}
                       <div className="pt-2 border-t border-border/50 flex justify-between font-medium">
                         <span>Total</span>
-                        <span>{message.parsedData.totalCalories} kcal</span>
+                        <span>{message.parsedData.total_calories} kcal</span>
                       </div>
                     </div>
 
