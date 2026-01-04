@@ -2057,7 +2057,13 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
 
         // Recalculate totals
         await recalculateDailyTotals(supabase, log.id);
-        confirmationContent = "✅ Logged! What else did you have?";
+        
+        // Set confirmation message based on entry type
+        if (entryType === "exercise") {
+          confirmationContent = "✅ Logged! Let me know when you exercise next to keep track.";
+        } else {
+          confirmationContent = "✅ Logged! Let me know what you eat next to keep track.";
+        }
         
         // Show toast and log notification
         const itemsForNotification = parsedData.items.map(item => ({
