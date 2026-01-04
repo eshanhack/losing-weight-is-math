@@ -223,34 +223,36 @@ function DashboardStats({
             }`}>
             <div className="flex items-start justify-between mb-2">
               <h3 className="text-xs font-medium text-muted-foreground">Today's Balance</h3>
-              {/* Top right: Goal & Maintenance indicators */}
-              <div className="flex flex-col items-end gap-0.5 text-[10px]">
-                {formattedBalance.toGoal > 0 ? (
-                  <div className="flex items-center gap-1">
-                    <span>🔥</span>
-                    <span className="text-success font-semibold">{formattedBalance.toGoal.toLocaleString()}</span>
-                    <span className="text-muted-foreground">to goal</span>
+              {/* Info icon with tooltip */}
+              <div className="relative group">
+                <span className="text-muted-foreground hover:text-foreground cursor-help text-sm">ℹ️</span>
+                {/* Tooltip */}
+                <div className="absolute right-0 top-6 z-50 hidden group-hover:block w-44 p-2 bg-popover border border-border rounded-lg shadow-lg text-[10px]">
+                  <div className="space-y-1.5">
+                    {formattedBalance.toGoal > 0 ? (
+                      <div className="flex items-center gap-1.5">
+                        <span>🔥</span>
+                        <span>Burn <span className="text-success font-semibold">{formattedBalance.toGoal.toLocaleString()}</span> to reach goal</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5">
+                        <span>🍽️</span>
+                        <span>Can eat <span className="text-success font-semibold">{Math.abs(formattedBalance.toGoal).toLocaleString()}</span> more (at goal!)</span>
+                      </div>
+                    )}
+                    {stats.todayBalance >= 0 ? (
+                      <div className="flex items-center gap-1.5">
+                        <span>🏃</span>
+                        <span>Burn <span className="text-success font-semibold">{stats.todayBalance.toLocaleString()}</span> for maintenance</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5">
+                        <span>🍴</span>
+                        <span>Can eat <span className="font-medium">{Math.abs(stats.todayBalance).toLocaleString()}</span> before maintenance</span>
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <div className="flex items-center gap-1">
-                    <span>🍽️</span>
-                    <span className="text-success font-semibold">{Math.abs(formattedBalance.toGoal).toLocaleString()}</span>
-                    <span className="text-muted-foreground">to goal</span>
-                  </div>
-                )}
-                {stats.todayBalance >= 0 ? (
-                  <div className="flex items-center gap-1">
-                    <span>🏃</span>
-                    <span className="text-success font-semibold">{stats.todayBalance.toLocaleString()}</span>
-                    <span className="text-muted-foreground">to maint.</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1">
-                    <span>🍴</span>
-                    <span className="text-muted-foreground font-medium">{Math.abs(stats.todayBalance).toLocaleString()}</span>
-                    <span className="text-muted-foreground">to maint.</span>
-                  </div>
-                )}
+                </div>
               </div>
             </div>
             {/* Main value with goal */}
