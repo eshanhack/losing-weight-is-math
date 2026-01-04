@@ -670,75 +670,129 @@ function generateMealRecommendation(ctx: MealRecommendationContext): string {
   const { caloriesLeft, proteinGoal, proteinConsumed, mealType } = ctx;
   const proteinLeft = Math.max(0, proteinGoal - proteinConsumed);
   
-  // Meal suggestions organized by calorie range
-  const mealIdeas: Record<string, { name: string; cal: number; protein: number; emoji: string }[]> = {
-    under200: [
-      { name: "Greek yogurt (150g)", cal: 90, protein: 15, emoji: "🥛" },
-      { name: "Cottage cheese (100g)", cal: 80, protein: 11, emoji: "🧀" },
-      { name: "2 hard boiled eggs", cal: 140, protein: 12, emoji: "🥚" },
-      { name: "Protein shake", cal: 120, protein: 25, emoji: "🥤" },
-      { name: "Apple with 1 tbsp almond butter", cal: 180, protein: 4, emoji: "🍎" },
-    ],
-    under400: [
-      { name: "Grilled chicken breast (150g)", cal: 230, protein: 45, emoji: "🍗" },
-      { name: "Tuna salad (no mayo)", cal: 200, protein: 40, emoji: "🐟" },
-      { name: "4 egg white omelet with veggies", cal: 180, protein: 24, emoji: "🍳" },
-      { name: "Turkey wrap (whole wheat)", cal: 350, protein: 25, emoji: "🌯" },
-      { name: "Salmon fillet (120g)", cal: 280, protein: 28, emoji: "🐟" },
-    ],
-    under600: [
-      { name: "Chicken stir-fry with veggies", cal: 450, protein: 40, emoji: "🍲" },
-      { name: "Grilled salmon with broccoli", cal: 400, protein: 35, emoji: "🐟" },
-      { name: "Turkey burger (no bun) with salad", cal: 380, protein: 35, emoji: "🍔" },
-      { name: "Shrimp with quinoa", cal: 420, protein: 35, emoji: "🍤" },
-      { name: "Lean beef with roasted vegetables", cal: 480, protein: 40, emoji: "🥩" },
-    ],
-    under800: [
-      { name: "Chicken breast with rice & veggies", cal: 550, protein: 50, emoji: "🍚" },
-      { name: "Fish tacos (2) with slaw", cal: 500, protein: 30, emoji: "🌮" },
-      { name: "Pasta with lean meat sauce (small)", cal: 600, protein: 30, emoji: "🍝" },
-      { name: "Poke bowl", cal: 550, protein: 35, emoji: "🍣" },
-      { name: "Grilled chicken Caesar salad", cal: 500, protein: 40, emoji: "🥗" },
-    ],
-    over800: [
-      { name: "Chicken burrito bowl", cal: 700, protein: 45, emoji: "🥙" },
-      { name: "Steak with sweet potato & salad", cal: 750, protein: 50, emoji: "🥩" },
-      { name: "Salmon with pasta", cal: 700, protein: 40, emoji: "🐟" },
-      { name: "Thai basil chicken with rice", cal: 680, protein: 35, emoji: "🍛" },
-    ],
-  };
+  // Comprehensive meal database with protein density info
+  const allMeals = [
+    // High protein, low calorie (protein-dense)
+    { name: "Protein shake (whey)", cal: 120, protein: 25, emoji: "🥤", tags: ["quick", "high-protein"] },
+    { name: "Greek yogurt (200g)", cal: 120, protein: 20, emoji: "🥛", tags: ["quick", "high-protein"] },
+    { name: "Cottage cheese (200g)", cal: 160, protein: 22, emoji: "🧀", tags: ["quick", "high-protein"] },
+    { name: "2 cans of tuna", cal: 200, protein: 50, emoji: "🐟", tags: ["high-protein", "meal"] },
+    { name: "Grilled chicken breast (200g)", cal: 310, protein: 58, emoji: "🍗", tags: ["high-protein", "meal"] },
+    { name: "Egg whites (6) scrambled", cal: 100, protein: 22, emoji: "🥚", tags: ["high-protein", "quick"] },
+    { name: "Shrimp (200g)", cal: 200, protein: 40, emoji: "🍤", tags: ["high-protein", "meal"] },
+    { name: "Turkey breast (150g)", cal: 165, protein: 35, emoji: "🦃", tags: ["high-protein", "meal"] },
+    
+    // Moderate protein meals
+    { name: "3 whole eggs scrambled", cal: 210, protein: 18, emoji: "🍳", tags: ["quick", "breakfast"] },
+    { name: "Salmon fillet (150g)", cal: 280, protein: 34, emoji: "🐟", tags: ["high-protein", "meal"] },
+    { name: "Lean beef steak (150g)", cal: 270, protein: 38, emoji: "🥩", tags: ["high-protein", "meal"] },
+    { name: "Chicken thigh (skinless, 150g)", cal: 230, protein: 30, emoji: "🍗", tags: ["meal"] },
+    { name: "Tofu stir-fry (200g tofu)", cal: 250, protein: 20, emoji: "🥡", tags: ["vegetarian", "meal"] },
+    
+    // Complete meals
+    { name: "Chicken breast with rice & veggies", cal: 500, protein: 45, emoji: "🍚", tags: ["meal", "complete"] },
+    { name: "Salmon with quinoa & greens", cal: 520, protein: 40, emoji: "🐟", tags: ["meal", "complete"] },
+    { name: "Turkey meatballs with zucchini noodles", cal: 380, protein: 35, emoji: "🍝", tags: ["meal", "complete"] },
+    { name: "Chicken stir-fry with veggies", cal: 400, protein: 38, emoji: "🍲", tags: ["meal", "complete"] },
+    { name: "Grilled fish tacos (2)", cal: 450, protein: 30, emoji: "🌮", tags: ["meal", "complete"] },
+    { name: "Chicken Caesar salad (no croutons)", cal: 400, protein: 35, emoji: "🥗", tags: ["meal", "complete"] },
+    { name: "Poke bowl", cal: 550, protein: 35, emoji: "🍣", tags: ["meal", "complete"] },
+    { name: "Burrito bowl (chicken, no rice)", cal: 480, protein: 42, emoji: "🥙", tags: ["meal", "complete"] },
+    { name: "Steak with sweet potato & salad", cal: 650, protein: 45, emoji: "🥩", tags: ["meal", "complete"] },
+    
+    // Lower protein options (for when protein goal is met)
+    { name: "Mixed green salad with olive oil", cal: 150, protein: 3, emoji: "🥗", tags: ["light", "vegetarian"] },
+    { name: "Fruit bowl", cal: 180, protein: 2, emoji: "🍇", tags: ["light", "snack"] },
+    { name: "Roasted vegetables", cal: 120, protein: 4, emoji: "🥦", tags: ["light", "vegetarian"] },
+    { name: "Rice bowl with veggies", cal: 350, protein: 8, emoji: "🍚", tags: ["vegetarian", "meal"] },
+  ];
 
-  // Select appropriate calorie tier
-  let tierKey = 'over800';
-  if (caloriesLeft < 200) tierKey = 'under200';
-  else if (caloriesLeft < 400) tierKey = 'under400';
-  else if (caloriesLeft < 600) tierKey = 'under600';
-  else if (caloriesLeft < 800) tierKey = 'under800';
-
-  const options = mealIdeas[tierKey];
+  // Filter meals that fit the calorie budget
+  const fittingMeals = allMeals.filter(meal => meal.cal <= caloriesLeft);
   
-  // Sort by protein if they need protein, otherwise by calories fitting their budget
-  const sorted = [...options].sort((a, b) => {
-    if (proteinLeft > 20) {
-      return b.protein - a.protein; // Prioritize high protein
-    }
-    return Math.abs(a.cal - caloriesLeft * 0.8) - Math.abs(b.cal - caloriesLeft * 0.8);
-  });
-
-  const top3 = sorted.slice(0, 3);
-  
-  let message = `🍽️ You have **${caloriesLeft} cal** left for ${mealType}`;
-  if (proteinLeft > 10) {
-    message += ` (and ${proteinLeft}g protein to go)`;
+  if (fittingMeals.length === 0) {
+    return `⚠️ You only have **${caloriesLeft} cal** left - that's quite tight!\n\nLow-cal options:\n• ${allMeals[5].emoji} ${allMeals[5].name} (${allMeals[5].cal} cal, ${allMeals[5].protein}g protein)\n• 🥗 Plain salad with lemon (50 cal)\n• 🥒 Raw veggies (30 cal)\n\n💡 Consider if you've logged everything accurately today!`;
   }
-  message += `!\n\nHere are some ideas:\n`;
+
+  // Calculate protein density (protein per calorie)
+  const mealsWithDensity = fittingMeals.map(meal => ({
+    ...meal,
+    proteinDensity: meal.protein / meal.cal,
+    hitsProteinGoal: meal.protein >= proteinLeft,
+    proteinGap: proteinLeft - meal.protein,
+  }));
+
+  // Different sorting strategies based on needs
+  let sortedMeals;
+  let headerMessage = "";
+  let strategy = "";
+
+  if (proteinLeft >= 30 && caloriesLeft <= 400) {
+    // TIGHT SITUATION: Need lots of protein in few calories
+    strategy = "tight";
+    sortedMeals = mealsWithDensity.sort((a, b) => b.proteinDensity - a.proteinDensity);
+    headerMessage = `💪 **Challenge:** Hit **${proteinLeft}g protein** with only **${caloriesLeft} cal**\n\nYou need protein-dense foods! Here are your best options:\n`;
+  } else if (proteinLeft > 0) {
+    // BALANCED: Need protein, have reasonable calories
+    strategy = "balanced";
+    // Prioritize meals that hit the protein goal while fitting calories
+    sortedMeals = mealsWithDensity.sort((a, b) => {
+      // First priority: meals that hit the protein goal
+      if (a.hitsProteinGoal && !b.hitsProteinGoal) return -1;
+      if (!a.hitsProteinGoal && b.hitsProteinGoal) return 1;
+      // Second priority: highest protein
+      return b.protein - a.protein;
+    });
+    
+    const canHitGoal = sortedMeals.some(m => m.hitsProteinGoal);
+    if (canHitGoal) {
+      headerMessage = `🎯 You have **${caloriesLeft} cal** and **${proteinLeft}g protein** to go for ${mealType}.\n\n✅ These meals will hit your protein goal:\n`;
+    } else {
+      headerMessage = `🍽️ You have **${caloriesLeft} cal** and **${proteinLeft}g protein** left for ${mealType}.\n\n⚠️ Hard to hit protein in one meal - here are the highest protein options:\n`;
+    }
+  } else {
+    // PROTEIN MET: Just need to fill calories
+    strategy = "calories-only";
+    sortedMeals = mealsWithDensity.sort((a, b) => {
+      // Prefer meals that use most of the calorie budget efficiently
+      return Math.abs(b.cal - caloriesLeft * 0.75) - Math.abs(a.cal - caloriesLeft * 0.75);
+    });
+    headerMessage = `🎉 **Protein goal hit!** You have **${caloriesLeft} cal** left for ${mealType}.\n\nEnjoy any of these:\n`;
+  }
+
+  // Get top recommendations
+  const top4 = sortedMeals.slice(0, 4);
   
-  top3.forEach((meal, idx) => {
-    message += `\n${idx + 1}. ${meal.emoji} **${meal.name}**\n   ${meal.cal} cal • ${meal.protein}g protein`;
+  let message = headerMessage;
+  
+  top4.forEach((meal, idx) => {
+    const proteinStatus = meal.hitsProteinGoal 
+      ? "✅" 
+      : proteinLeft > 0 
+        ? `(${meal.proteinGap}g short)` 
+        : "";
+    
+    message += `\n${idx + 1}. ${meal.emoji} **${meal.name}**\n   ${meal.cal} cal • ${meal.protein}g protein ${proteinStatus}`;
   });
-  
-  message += `\n\n💡 Tip: High protein meals keep you fuller longer!`;
-  
+
+  // Add tips based on situation
+  if (strategy === "tight") {
+    message += `\n\n💡 **Pro tips for high protein, low cal:**\n• Add a protein shake (+25g for 120 cal)\n• Egg whites are 17 cal per egg, 4g protein\n• Tuna is the most protein-dense food!`;
+  } else if (strategy === "balanced" && proteinLeft > 30) {
+    message += `\n\n💡 **To maximize protein:** Consider adding a protein shake or Greek yogurt on the side!`;
+  } else if (strategy === "calories-only") {
+    message += `\n\n💡 You've earned some flexibility! Choose what sounds good.`;
+  }
+
+  // Combo suggestion if they need lots of protein
+  if (proteinLeft > 40 && caloriesLeft > 300) {
+    const shake = allMeals.find(m => m.name.includes("Protein shake"));
+    const chicken = allMeals.find(m => m.name.includes("Grilled chicken breast"));
+    if (shake && chicken && (shake.cal + chicken.cal) <= caloriesLeft) {
+      message += `\n\n🔥 **Power combo:** ${chicken.emoji} Chicken breast + ${shake.emoji} Protein shake = **${chicken.cal + shake.cal} cal**, **${chicken.protein + shake.protein}g protein**`;
+    }
+  }
+
   return message;
 }
 
