@@ -926,11 +926,9 @@ function generateActivitySuggestions(caloriesToBurn: number): string {
     { name: "Cycling", emoji: "🚴", calPerMin: 8 },
     { name: "Swimming", emoji: "🏊", calPerMin: 10 },
     { name: "HIIT", emoji: "💪", calPerMin: 14 },
-    { name: "Jump rope", emoji: "⏱️", calPerMin: 12 },
-    { name: "Dancing", emoji: "💃", calPerMin: 7 },
   ];
 
-  let message = `🔥 **To burn ${caloriesToBurn} calories:**\n\n`;
+  let message = `🔥 **Burn ${caloriesToBurn} cal:**\n\n`;
 
   // Generate suggestions for each activity
   const suggestions: string[] = [];
@@ -943,10 +941,10 @@ function generateActivitySuggestions(caloriesToBurn: number): string {
       const hours = Math.floor(minutes / 60);
       const mins = minutes % 60;
       const timeStr = hours > 0 
-        ? (mins > 0 ? `${hours}h ${mins}min` : `${hours}h`)
-        : `${minutes} min`;
+        ? (mins > 0 ? `${hours}h ${mins}m` : `${hours}h`)
+        : `${minutes}m`;
       
-      suggestions.push(`${activity.emoji} ${activity.name} → **${timeStr}**`);
+      suggestions.push(`${activity.emoji} ${activity.name}: **${timeStr}**`);
     }
   }
 
@@ -956,13 +954,13 @@ function generateActivitySuggestions(caloriesToBurn: number): string {
   message += "\n\n";
   
   if (caloriesToBurn <= 150) {
-    message += "💡 Easy! A short walk or taking stairs would do it.";
+    message += "💡 A short walk would do it!";
   } else if (caloriesToBurn <= 300) {
-    message += "💡 A 30-45 min walk or quick jog. Try splitting into two sessions!";
+    message += "💡 A 30-45 min walk works. Split it up if needed!";
   } else if (caloriesToBurn <= 500) {
-    message += "💡 Solid workout! Mix activities to make it fun.";
+    message += "💡 Mix activities to keep it fun!";
   } else {
-    message += "💡 Big goal! Spread across the day or combine with eating less.";
+    message += "💡 Spread it out or combine with eating less.";
   }
 
   return message;
