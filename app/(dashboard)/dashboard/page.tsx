@@ -2217,8 +2217,20 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
     ]);
   };
 
-  // Clear chat - only clears UI messages, not database data
-  const clearChat = () => {
+  // Clear chat - clears UI messages AND database chat history for today
+  const clearChat = async () => {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (user) {
+      // Delete today's chat messages from database
+      await supabase
+        .from("chat_messages")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("log_date", today);
+    }
+    
     setMessages([]);
     setPendingSaveMeal(null);
     showToast("Chat cleared", "food");
