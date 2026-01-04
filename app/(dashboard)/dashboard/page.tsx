@@ -1509,11 +1509,12 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
         const updatedItemNames: string[] = [];
         
         for (const edit of editsToApply) {
-          const searchTerm = edit.search_term.toLowerCase();
+          const searchTerm = edit.search_term?.toLowerCase() || "";
           
           // Find matching items in the pending log
+          let foundMatch = false;
           for (let i = 0; i < updatedItems.length; i++) {
-            if (updatedItems[i].description.toLowerCase().includes(searchTerm)) {
+            if (searchTerm && updatedItems[i].description.toLowerCase().includes(searchTerm)) {
               const quantity = extractQuantity(updatedItems[i].description);
               const multiplier = isPerUnit ? quantity : 1;
               
@@ -1524,7 +1525,23 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
                 updatedItems[i] = { ...updatedItems[i], protein: edit.updates.protein * multiplier };
               }
               updatedItemNames.push(updatedItems[i].description);
+              foundMatch = true;
             }
+          }
+          
+          // If no match found but there's only 1 item, assume user means that item
+          // (e.g., "no it was 650 calories" when there's one exercise pending)
+          if (!foundMatch && updatedItems.length === 1 && edit.updates?.calories !== undefined) {
+            const quantity = extractQuantity(updatedItems[0].description);
+            const multiplier = isPerUnit ? quantity : 1;
+            
+            if (edit.updates?.calories !== undefined) {
+              updatedItems[0] = { ...updatedItems[0], calories: edit.updates.calories * multiplier };
+            }
+            if (edit.updates?.protein !== undefined) {
+              updatedItems[0] = { ...updatedItems[0], protein: edit.updates.protein * multiplier };
+            }
+            updatedItemNames.push(updatedItems[0].description);
           }
         }
         
