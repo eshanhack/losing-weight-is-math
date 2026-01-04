@@ -83,19 +83,19 @@ function DashboardStats({
   const formattedSevenDay = formatBalance(stats.sevenDayBalance);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-4xl">
       {/* Header */}
       <div>
-        <h1 className="font-display text-2xl lg:text-3xl font-bold">
+        <h1 className="font-display text-2xl lg:text-4xl font-bold">
           Hey {profile?.first_name} 👋
         </h1>
-        <p className="text-muted-foreground text-sm mt-1">
+        <p className="text-muted-foreground mt-1">
           Here's your progress at a glance
         </p>
       </div>
 
-      {/* Stat Cards - 2x2 grid on desktop sidebar */}
-      <div className="grid grid-cols-2 gap-3">
+      {/* Stat Cards - 4 columns on desktop */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Today's Balance */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
@@ -103,25 +103,25 @@ function DashboardStats({
           transition={{ delay: 0.1 }}
         >
           <Card
-            className={`p-4 bg-card border-border transition-all ${
+            className={`p-5 bg-card border-border transition-all h-full ${
               formattedBalance.isDeficit ? "border-success/30" : stats.todayBalance > 0 ? "border-danger/30" : ""
             }`}
           >
-            <p className="text-xs text-muted-foreground mb-1">Today</p>
-            <p className={`font-display text-2xl font-bold ${
+            <p className="text-xs text-muted-foreground mb-2">Today</p>
+            <p className={`font-display text-3xl font-bold ${
               formattedBalance.color === "success" ? "text-success" : formattedBalance.color === "danger" ? "text-danger" : ""
             }`}>
               {formattedBalance.text}
             </p>
-            <p className="text-xs text-muted-foreground">kcal</p>
-            <div className="mt-2 pt-2 border-t border-border text-xs text-muted-foreground space-y-0.5">
+            <p className="text-sm text-muted-foreground">kcal</p>
+            <div className="mt-3 pt-3 border-t border-border text-sm text-muted-foreground space-y-1">
               <div className="flex justify-between">
                 <span>In</span>
                 <span>{stats.todayIntake}</span>
               </div>
               <div className="flex justify-between">
                 <span>Out</span>
-                <span>+{stats.todayOuttake}</span>
+                <span className="text-success">+{stats.todayOuttake}</span>
               </div>
               <div className="flex justify-between">
                 <span>Protein</span>
@@ -137,19 +137,19 @@ function DashboardStats({
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15 }}
         >
-          <Card className={`p-4 bg-card border-border ${formattedSevenDay.isDeficit ? "border-success/30" : ""}`}>
-            <p className="text-xs text-muted-foreground mb-1">7-Day</p>
-            <p className={`font-display text-2xl font-bold ${
+          <Card className={`p-5 bg-card border-border h-full ${formattedSevenDay.isDeficit ? "border-success/30" : ""}`}>
+            <p className="text-xs text-muted-foreground mb-2">7-Day Total</p>
+            <p className={`font-display text-3xl font-bold ${
               formattedSevenDay.color === "success" ? "text-success" : formattedSevenDay.color === "danger" ? "text-danger" : ""
             }`}>
               {formattedSevenDay.text}
             </p>
-            <p className="text-xs text-muted-foreground">kcal total</p>
-            <div className="mt-2 pt-2 border-t border-border">
-              <p className="text-xs text-muted-foreground">
-                Avg: <span className={stats.sevenDayAverage < 0 ? "text-success" : "text-danger"}>
+            <p className="text-sm text-muted-foreground">kcal</p>
+            <div className="mt-3 pt-3 border-t border-border">
+              <p className="text-sm text-muted-foreground">
+                Daily avg: <span className={`font-medium ${stats.sevenDayAverage < 0 ? "text-success" : "text-danger"}`}>
                   {stats.sevenDayAverage < 0 ? "" : "+"}{stats.sevenDayAverage}
-                </span>/day
+                </span>
               </p>
             </div>
           </Card>
@@ -161,12 +161,15 @@ function DashboardStats({
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
         >
-          <Card className="p-4 bg-card border-border">
-            <p className="text-xs text-muted-foreground mb-1">Real Weight</p>
-            <p className="font-display text-2xl font-bold">
+          <Card className="p-5 bg-card border-border h-full">
+            <p className="text-xs text-muted-foreground mb-2">Real Weight</p>
+            <p className="font-display text-3xl font-bold">
               {stats.realWeight?.toFixed(1) || "—"}
             </p>
-            <p className="text-xs text-muted-foreground">kg (7d avg)</p>
+            <p className="text-sm text-muted-foreground">kg</p>
+            <div className="mt-3 pt-3 border-t border-border">
+              <p className="text-sm text-muted-foreground">7-day average</p>
+            </div>
           </Card>
         </motion.div>
 
@@ -176,44 +179,47 @@ function DashboardStats({
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.25 }}
         >
-          <Card className="p-4 bg-card border-border border-gold/20">
-            <p className="text-xs text-muted-foreground mb-1">Streak</p>
-            <p className="font-display text-2xl font-bold text-gold">
+          <Card className="p-5 bg-card border-border border-gold/20 h-full">
+            <p className="text-xs text-muted-foreground mb-2">Streak</p>
+            <p className="font-display text-3xl font-bold text-gold">
               🔥 {stats.streak}
             </p>
-            <p className="text-xs text-muted-foreground">days</p>
+            <p className="text-sm text-muted-foreground">days</p>
+            <div className="mt-3 pt-3 border-t border-border">
+              <p className="text-sm text-muted-foreground">Keep it going!</p>
+            </div>
           </Card>
         </motion.div>
       </div>
 
-      {/* Calendar - Compact version */}
+      {/* Calendar - Full size */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3 }}
       >
-        <Card className="p-4 bg-card border-border">
-          <h2 className="font-display text-sm font-semibold mb-3">
+        <Card className="p-6 bg-card border-border">
+          <h2 className="font-display text-lg font-semibold mb-4">
             {new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}
           </h2>
 
           {/* Day headers */}
-          <div className="grid grid-cols-7 gap-1 mb-1">
-            {["S", "M", "T", "W", "T", "F", "S"].map((day, i) => (
-              <div key={i} className="text-center text-[10px] text-muted-foreground font-medium">
+          <div className="grid grid-cols-7 gap-2 mb-2">
+            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day, i) => (
+              <div key={i} className="text-center text-sm text-muted-foreground font-medium py-2">
                 {day}
               </div>
             ))}
           </div>
 
           {/* Calendar grid */}
-          <div className="grid grid-cols-7 gap-1">
+          <div className="grid grid-cols-7 gap-2">
             {calendar.map((day, idx) => (
               <button
                 key={idx}
                 onClick={() => day.date && !day.isLocked && !day.isFuture && onDayClick(day)}
                 disabled={!day.date || day.isLocked || day.isFuture}
-                className={`aspect-square rounded text-xs flex items-center justify-center transition-all relative ${
+                className={`aspect-square rounded-lg text-sm flex flex-col items-center justify-center transition-all relative p-2 ${
                   !day.date
                     ? "invisible"
                     : day.isLocked
@@ -221,15 +227,34 @@ function DashboardStats({
                     : day.isFuture
                     ? "bg-secondary/20 text-muted-foreground"
                     : day.hasData && day.isSuccess
-                    ? "bg-success/20 text-success font-medium"
+                    ? "bg-success/20 text-success hover:bg-success/30"
                     : day.hasData && !day.isSuccess
-                    ? "bg-danger/20 text-danger font-medium"
+                    ? "bg-danger/20 text-danger hover:bg-danger/30"
                     : "bg-secondary/50 hover:bg-secondary"
-                } ${day.isToday ? "ring-1 ring-primary" : ""}`}
+                } ${day.isToday ? "ring-2 ring-primary" : ""}`}
               >
-                {day.date && day.dayOfMonth}
+                <span className="font-medium">{day.date && day.dayOfMonth}</span>
+                {day.weight && (
+                  <span className="text-[10px] text-muted-foreground mt-0.5">{day.weight}kg</span>
+                )}
               </button>
             ))}
+          </div>
+
+          {/* Legend */}
+          <div className="flex items-center gap-6 mt-4 pt-4 border-t border-border text-sm text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded bg-success/20 border border-success/30"></div>
+              <span>Deficit (good)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded bg-danger/20 border border-danger/30"></div>
+              <span>Surplus</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded ring-2 ring-primary"></div>
+              <span>Today</span>
+            </div>
           </div>
         </Card>
       </motion.div>
@@ -245,39 +270,16 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [todayStats, setTodayStats] = useState({ intake: 0, outtake: 0, protein: 0 });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const today = new Date().toISOString().split("T")[0];
 
   useEffect(() => {
     loadChatHistory();
-    fetchTodayStats();
   }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
-
-  const fetchTodayStats = async () => {
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const { data: log } = await supabase
-      .from("daily_logs")
-      .select("caloric_intake, caloric_outtake, protein_grams")
-      .eq("user_id", user.id)
-      .eq("log_date", today)
-      .single();
-
-    if (log) {
-      setTodayStats({
-        intake: log.caloric_intake || 0,
-        outtake: log.caloric_outtake || 0,
-        protein: log.protein_grams || 0,
-      });
-    }
-  };
 
   const loadChatHistory = async () => {
     const supabase = createClient();
@@ -305,7 +307,7 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
         {
           id: "welcome",
           role: "assistant",
-          content: "What have you eaten or done today? 🍽️🏃",
+          content: "Hey! 👋 What have you eaten or done today?\n\nTry: \"2 eggs and toast\" or \"30 min run\"",
         },
       ]);
     }
@@ -425,8 +427,6 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
           protein_grams: totalProtein,
         })
         .eq("id", log.id);
-
-      setTodayStats({ intake: totalIntake, outtake: totalOuttake, protein: totalProtein });
     }
 
     setMessages((prev) =>
@@ -449,27 +449,16 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header with today's stats */}
-      <div className="p-4 border-b border-border bg-card/50">
-        <h2 className="font-display font-semibold mb-2">AI Diary</h2>
-        <div className="grid grid-cols-3 gap-2 text-center text-xs">
-          <div className="bg-secondary/50 rounded p-2">
-            <p className="text-muted-foreground">In</p>
-            <p className="font-display font-bold">{todayStats.intake}</p>
-          </div>
-          <div className="bg-secondary/50 rounded p-2">
-            <p className="text-muted-foreground">Out</p>
-            <p className="font-display font-bold text-success">+{todayStats.outtake}</p>
-          </div>
-          <div className="bg-secondary/50 rounded p-2">
-            <p className="text-muted-foreground">Protein</p>
-            <p className="font-display font-bold">{todayStats.protein}g</p>
-          </div>
-        </div>
+      {/* Header */}
+      <div className="p-4 border-b border-border">
+        <h2 className="font-display font-semibold flex items-center gap-2">
+          <span>💬</span> AI Diary
+        </h2>
+        <p className="text-xs text-muted-foreground mt-1">Log food & exercise naturally</p>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="flex-1 overflow-y-auto p-3 space-y-2">
         <AnimatePresence>
           {messages.map((message) => (
             <motion.div
@@ -479,21 +468,21 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
               className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
             >
               <div
-                className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
+                className={`max-w-[90%] rounded-2xl px-3 py-2 text-sm ${
                   message.role === "user"
-                    ? "bg-primary text-primary-foreground rounded-br-md"
-                    : "bg-secondary rounded-bl-md"
+                    ? "bg-primary text-primary-foreground rounded-br-sm"
+                    : "bg-secondary rounded-bl-sm"
                 }`}
               >
-                <p>{message.content}</p>
+                <p className="whitespace-pre-wrap">{message.content}</p>
 
                 {message.parsedData && !message.confirmed && (
                   <div className="mt-2 pt-2 border-t border-border/30">
                     <div className="space-y-1 text-xs">
                       {message.parsedData.items.map((item, idx) => (
-                        <div key={idx} className="flex justify-between">
-                          <span>{item.description}</span>
-                          <span className="opacity-70">{item.calories} kcal</span>
+                        <div key={idx} className="flex justify-between gap-2">
+                          <span className="truncate">{item.description}</span>
+                          <span className="opacity-70 shrink-0">{item.calories}</span>
                         </div>
                       ))}
                     </div>
@@ -501,11 +490,11 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
                       <Button
                         size="sm"
                         onClick={() => handleConfirm(message.id)}
-                        className="h-7 text-xs bg-success hover:bg-success/90"
+                        className="h-6 text-xs bg-success hover:bg-success/90 px-2"
                       >
-                        ✓ Log it
+                        ✓ Log
                       </Button>
-                      <Button size="sm" variant="ghost" className="h-7 text-xs">
+                      <Button size="sm" variant="ghost" className="h-6 text-xs px-2">
                         ✗
                       </Button>
                     </div>
@@ -518,7 +507,7 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
 
         {loading && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start">
-            <div className="bg-secondary rounded-2xl rounded-bl-md px-3 py-2">
+            <div className="bg-secondary rounded-2xl rounded-bl-sm px-3 py-2">
               <div className="flex gap-1">
                 <span className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce" />
                 <span className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "0.1s" }} />
@@ -532,17 +521,17 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
       </div>
 
       {/* Input */}
-      <div className="p-4 border-t border-border">
+      <div className="p-3 border-t border-border">
         <form onSubmit={handleSubmit} className="flex gap-2">
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="What did you eat or do?"
-            className="flex-1 bg-secondary/50 border-0 text-sm"
+            placeholder="What did you eat?"
+            className="flex-1 bg-secondary/50 border-0 text-sm h-9"
             disabled={loading}
           />
-          <Button type="submit" disabled={loading || !input.trim()} size="sm" className="bg-primary">
-            Send
+          <Button type="submit" disabled={loading || !input.trim()} size="sm" className="bg-primary h-9 px-3">
+            →
           </Button>
         </form>
       </div>
@@ -771,8 +760,8 @@ function DashboardContent() {
 
       {/* Desktop: Split view */}
       <div className="hidden lg:flex h-[calc(100vh-4rem)]">
-        {/* Left: Dashboard */}
-        <div className="w-[400px] xl:w-[450px] border-r border-border overflow-y-auto p-6">
+        {/* Left: Dashboard (main content) */}
+        <div className="flex-1 overflow-y-auto p-6">
           <DashboardStats 
             stats={stats} 
             calendar={calendar} 
@@ -782,8 +771,8 @@ function DashboardContent() {
           />
         </div>
 
-        {/* Right: AI Diary */}
-        <div className="flex-1 flex flex-col">
+        {/* Right: AI Diary (sidebar) */}
+        <div className="w-[380px] xl:w-[420px] border-l border-border flex flex-col bg-card/30">
           <AIDiary onEntryConfirmed={handleEntryConfirmed} />
         </div>
       </div>
