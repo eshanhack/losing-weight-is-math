@@ -221,11 +221,40 @@ function DashboardStats({
               formattedBalance.color === "warning" ? "border-gold/30" : 
               formattedBalance.color === "danger" ? "border-danger/30" : ""
             }`}>
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-start justify-between mb-2">
               <h3 className="text-xs font-medium text-muted-foreground">Today's Balance</h3>
+              {/* Top right: Goal & Maintenance indicators */}
+              <div className="flex flex-col items-end gap-0.5 text-[10px]">
+                {formattedBalance.toGoal > 0 ? (
+                  <div className="flex items-center gap-1">
+                    <span>🔥</span>
+                    <span className="text-success font-semibold">{formattedBalance.toGoal.toLocaleString()}</span>
+                    <span className="text-muted-foreground">to goal</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1">
+                    <span>🍽️</span>
+                    <span className="text-success font-semibold">{Math.abs(formattedBalance.toGoal).toLocaleString()}</span>
+                    <span className="text-muted-foreground">to goal</span>
+                  </div>
+                )}
+                {stats.todayBalance >= 0 ? (
+                  <div className="flex items-center gap-1">
+                    <span>🏃</span>
+                    <span className="text-success font-semibold">{stats.todayBalance.toLocaleString()}</span>
+                    <span className="text-muted-foreground">to maint.</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1">
+                    <span>🍴</span>
+                    <span className="text-muted-foreground font-medium">{Math.abs(stats.todayBalance).toLocaleString()}</span>
+                    <span className="text-muted-foreground">to maint.</span>
+                  </div>
+                )}
+              </div>
             </div>
-            {/* Main value with goal indicator */}
-            <div className="flex items-end gap-2 mb-3">
+            {/* Main value with goal */}
+            <div className="flex items-end gap-2 mb-2">
               <span className={`font-display text-2xl font-bold leading-none ${
                 formattedBalance.color === "success" ? "text-success" : 
                 formattedBalance.color === "warning" ? "text-gold" : 
@@ -235,36 +264,10 @@ function DashboardStats({
               </span>
               <span className="text-xs text-muted-foreground pb-0.5">/ {stats.goalDeficit.toLocaleString()}</span>
             </div>
-            {/* Action indicators */}
-            <div className="space-y-1 text-[10px]">
-              {/* To Goal */}
-              {formattedBalance.toGoal > 0 ? (
-                <div className="flex items-center gap-1">
-                  <span>🔥</span>
-                  <span className="text-success font-semibold">{formattedBalance.toGoal.toLocaleString()}</span>
-                  <span className="text-muted-foreground">to reach goal</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1">
-                  <span>🍽️</span>
-                  <span className="text-danger font-semibold">{Math.abs(formattedBalance.toGoal).toLocaleString()}</span>
-                  <span className="text-muted-foreground">to reach goal</span>
-                </div>
-              )}
-              {/* To Maintenance */}
-              {stats.todayBalance >= 0 ? (
-                <div className="flex items-center gap-1">
-                  <span>🏃</span>
-                  <span className="text-success font-semibold">{stats.todayBalance.toLocaleString()}</span>
-                  <span className="text-muted-foreground">to reach maint.</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1">
-                  <span>🍴</span>
-                  <span className="text-danger font-semibold">{Math.abs(stats.todayBalance).toLocaleString()}</span>
-                  <span className="text-muted-foreground">to reach maint.</span>
-                </div>
-              )}
+            {/* Eaten & Burned */}
+            <div className="flex gap-3 text-[10px] text-muted-foreground">
+              <span>🍽️ {stats.todayIntake.toLocaleString()}</span>
+              <span className="text-success">🔥 +{stats.todayOuttake.toLocaleString()}</span>
             </div>
           </Card>
         </motion.div>
