@@ -94,6 +94,7 @@ interface CalendarDay {
   intake: number;
   outtake: number;
   isSuccess: boolean;
+  balanceStatus: "success" | "warning" | "danger"; // success=met goal, warning=deficit but missed goal, danger=surplus
   isLocked: boolean;
   isFuture: boolean;
   isToday: boolean;
@@ -418,9 +419,11 @@ function DashboardStats({
                     ? "bg-secondary/50 cursor-not-allowed border border-border/50"
                     : day.isFuture
                     ? "bg-secondary/20 text-muted-foreground cursor-default"
-                    : day.hasData && day.isSuccess
+                    : day.hasData && day.balanceStatus === "success"
                     ? "bg-success/10 hover:bg-success/20 border border-success/30"
-                    : day.hasData && !day.isSuccess
+                    : day.hasData && day.balanceStatus === "warning"
+                    ? "bg-gold/10 hover:bg-gold/20 border border-gold/30"
+                    : day.hasData && day.balanceStatus === "danger"
                     ? "bg-danger/10 hover:bg-danger/20 border border-danger/30"
                     : "bg-secondary/30 hover:bg-secondary/50"
                 } ${day.isToday ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}
@@ -447,7 +450,10 @@ function DashboardStats({
                 )}
                 {day.hasData && !day.isLocked && (
                   <div className="flex flex-col items-center mt-0.5 gap-0.5">
-                    <span className={`text-[11px] font-semibold ${day.isSuccess ? "text-success" : "text-danger"}`}>
+                    <span className={`text-[11px] font-semibold ${
+                      day.balanceStatus === "success" ? "text-success" : 
+                      day.balanceStatus === "warning" ? "text-gold" : "text-danger"
+                    }`}>
                       {day.balance >= 0 ? "+" : ""}{day.balance} cal
                     </span>
                     <div className="flex gap-1.5 text-[9px] text-muted-foreground">
@@ -490,8 +496,12 @@ function DashboardStats({
               <span>Goal met</span>
             </div>
             <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded bg-gold/10 border border-gold/20"></div>
+              <span>Deficit (missed goal)</span>
+            </div>
+            <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded bg-danger/10 border border-danger/20"></div>
-              <span>Missed goal</span>
+              <span>Surplus</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded ring-2 ring-primary"></div>
@@ -2869,7 +2879,7 @@ function DashboardContent() {
     const calendarDays: CalendarDay[] = [];
 
     for (let i = 0; i < startDayOfWeek; i++) {
-      calendarDays.push({ date: "", dayOfMonth: 0, weight: null, weightChange: null, balance: 0, protein: 0, intake: 0, outtake: 0, isSuccess: false, isLocked: false, isFuture: true, isToday: false, hasData: false });
+      calendarDays.push({ date: "", dayOfMonth: 0, weight: null, weightChange: null, balance: 0, protein: 0, intake: 0, outtake: 0, isSuccess: false, balanceStatus: "warning", isLocked: false, isFuture: true, isToday: false, hasData: false });
     }
 
     // First pass: collect all weights for the month
@@ -2914,6 +2924,21 @@ function DashboardContent() {
       // e.g., -1100 <= -1000 means you exceeded your 1000 cal deficit goal
       const isSuccess = log ? balance <= goalDeficit : false;
       
+      // Balance status for color coding:
+      // success (green) = met/exceeded goal (balance <= goalDeficit)
+      // warning (orange) = in deficit but missed goal (balance < 0 && balance > goalDeficit)
+      // danger (red) = in surplus (balance >= 0)
+      let balanceStatus: "success" | "warning" | "danger" = "warning";
+      if (log) {
+        if (balance <= goalDeficit) {
+          balanceStatus = "success";
+        } else if (balance >= 0) {
+          balanceStatus = "danger";
+        } else {
+          balanceStatus = "warning";
+        }
+      }
+      
       const weight = dayWeights[dateStr];
       
       // Calculate weight change from previous day
@@ -2938,6 +2963,7 @@ function DashboardContent() {
         intake,
         outtake,
         isSuccess,
+        balanceStatus,
         isLocked,
         isFuture,
         isToday,
@@ -3015,6 +3041,11 @@ function DashboardContent() {
       handleDayClick(todayDay);
     } else {
       // Create a temporary day object for today
+      // Calculate balance status for color coding
+      const todayBalanceStatus: "success" | "warning" | "danger" = 
+        stats.todayBalance <= stats.goalDeficit ? "success" :
+        stats.todayBalance >= 0 ? "danger" : "warning";
+      
       handleDayClick({
         date: todayStr,
         dayOfMonth: new Date().getDate(),
@@ -3025,6 +3056,7 @@ function DashboardContent() {
         intake: stats.todayIntake,
         outtake: stats.todayOuttake,
         isSuccess: stats.todayBalance <= stats.goalDeficit,
+        balanceStatus: todayBalanceStatus,
         isLocked: false,
         isFuture: false,
         isToday: true,
@@ -3277,9 +3309,16 @@ function DashboardContent() {
             {/* Summary Stats */}
             {selectedDay?.hasData && (
               <div className="grid grid-cols-3 gap-3">
-                <div className={`p-3 rounded-lg ${selectedDay.isSuccess ? "bg-success/10 border border-success/20" : "bg-danger/10 border border-danger/20"}`}>
+                <div className={`p-3 rounded-lg ${
+                  selectedDay.balanceStatus === "success" ? "bg-success/10 border border-success/20" : 
+                  selectedDay.balanceStatus === "warning" ? "bg-gold/10 border border-gold/20" : 
+                  "bg-danger/10 border border-danger/20"
+                }`}>
                   <p className="text-[10px] uppercase text-muted-foreground mb-1">Balance</p>
-                  <p className={`font-display font-bold text-lg ${selectedDay.isSuccess ? "text-success" : "text-danger"}`}>
+                  <p className={`font-display font-bold text-lg ${
+                    selectedDay.balanceStatus === "success" ? "text-success" : 
+                    selectedDay.balanceStatus === "warning" ? "text-gold" : "text-danger"
+                  }`}>
                     {selectedDay.balance >= 0 ? "+" : ""}{selectedDay.balance}
                   </p>
                 </div>
