@@ -890,6 +890,17 @@ interface SavedMealLocal {
   total_protein: number;
 }
 
+// Helper to render markdown-style bold text (**text**)
+function renderMarkdown(text: string): React.ReactNode {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, index) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return <strong key={index}>{part.slice(2, -2)}</strong>;
+    }
+    return part;
+  });
+}
+
 function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConfirmed: () => void; todayHasWeight: boolean; dataLoaded: boolean }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -2125,7 +2136,7 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
                       : "bg-secondary text-foreground rounded-bl-none"
                   }`}
                 >
-                  <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
+                  <p className="whitespace-pre-wrap leading-relaxed">{renderMarkdown(message.content)}</p>
 
                   {/* Only show parsed data UI if it's NOT an error and NOT a chat message */}
                   {message.parsedData && !message.confirmed && !message.parsedData.is_error && message.parsedData.type !== "chat" && (
