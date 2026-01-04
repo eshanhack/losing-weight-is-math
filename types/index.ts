@@ -186,7 +186,7 @@ export interface ParsedExercise {
 }
 
 export interface AIParseResponse {
-  type: 'food' | 'exercise' | 'edit' | 'delete' | 'weight';
+  type: 'food' | 'exercise' | 'edit' | 'delete' | 'weight' | 'multi_edit';
   items: ParsedFoodItem[] | ParsedExercise[];
   total_calories: number;
   total_protein: number;
@@ -198,6 +198,15 @@ export interface AIParseResponse {
     protein?: number;
     description?: string;
   };
+  // For multi_edit operations (multiple items to update)
+  edits?: Array<{
+    search_term: string;
+    updates: {
+      calories?: number;
+      protein?: number;
+      description?: string;
+    };
+  }>;
   // For weight logging
   weight_kg?: number;
   // Error flag - when true, don't show log/cancel buttons

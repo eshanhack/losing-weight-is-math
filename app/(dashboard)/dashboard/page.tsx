@@ -872,8 +872,70 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
       }
 
       // Handle different operation types
-      if (parsedData.type === "edit" && parsedData.search_term) {
+      if ((parsedData.type === "edit" && parsedData.search_term) || 
+          (parsedData.type === "multi_edit" && parsedData.edits && parsedData.edits.length > 0)) {
         // EDIT OPERATION: Find and update matching entries
+        
+        // Handle both single edit and multi_edit
+        const editsToProcess = parsedData.type === "multi_edit" && parsedData.edits
+          ? parsedData.edits
+          : [{ search_term: parsedData.search_term!, updates: parsedData.updates! }];
+        
+        let totalUpdated = 0;
+        const updatedItems: string[] = [];
+        
+        for (const edit of editsToProcess) {
+          const searchTerm = edit.search_term.toLowerCase();
+          
+          // Find entries matching the search term
+          const { data: matchingEntries, error: searchError } = await supabase
+            .from("log_entries")
+            .select("*")
+            .eq("daily_log_id", log.id)
+            .ilike("description", `%${searchTerm}%`);
+
+          if (!searchError && matchingEntries && matchingEntries.length > 0) {
+            // Update all matching entries
+            const updates: Record<string, number> = {};
+            if (edit.updates?.calories !== undefined) {
+              updates.calories = edit.updates.calories;
+            }
+            if (edit.updates?.protein !== undefined) {
+              updates.protein_grams = edit.updates.protein;
+            }
+
+            const entryIds = matchingEntries.map(e => e.id);
+            const { error: updateError } = await supabase
+              .from("log_entries")
+              .update(updates)
+              .in("id", entryIds);
+
+            if (!updateError) {
+              totalUpdated += matchingEntries.length;
+              updatedItems.push(edit.search_term);
+              
+              // Log notification for each edit
+              logNotification(createEditNotification(
+                edit.search_term,
+                { calories: edit.updates?.calories, protein: edit.updates?.protein },
+                matchingEntries.length
+              ));
+            }
+          }
+        }
+        
+        // Recalculate totals after all edits
+        await recalculateDailyTotals(supabase, log.id);
+        
+        if (totalUpdated > 0) {
+          confirmationContent = `✅ Updated ${updatedItems.join(" and ")}!`;
+          showToast(`Updated ${updatedItems.join(", ")}`, "edit");
+        } else {
+          confirmationContent = `❌ Couldn't find any matching entries in today's log.`;
+        }
+        
+      } else if (parsedData.type === "edit" && parsedData.search_term) {
+        // Legacy single edit handling (fallback)
         const searchTerm = parsedData.search_term.toLowerCase();
         
         // Find entries matching the search term
@@ -1145,6 +1207,37 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
                         </div>
                       )}
 
+                      {/* For MULTI_EDIT operations */}
+                      {message.parsedData.type === "multi_edit" && message.parsedData.edits && (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2 text-xs">
+                            <span className="text-lg">📝</span>
+                            <span>Update multiple entries</span>
+                          </div>
+                          <div className="bg-white/5 rounded-lg p-2 space-y-2 text-xs">
+                            {message.parsedData.edits.map((edit, idx) => (
+                              <div key={idx} className="space-y-1">
+                                <div className="font-medium text-primary">"{edit.search_term}":</div>
+                                <div className="pl-2 space-y-0.5">
+                                  {edit.updates?.calories !== undefined && (
+                                    <div className="flex justify-between">
+                                      <span className="text-muted-foreground">Calories:</span>
+                                      <span>{edit.updates.calories} cal</span>
+                                    </div>
+                                  )}
+                                  {edit.updates?.protein !== undefined && (
+                                    <div className="flex justify-between">
+                                      <span className="text-muted-foreground">Protein:</span>
+                                      <span>{edit.updates.protein}g</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
                       {/* For DELETE operations */}
                       {message.parsedData.type === "delete" && message.parsedData.search_term && (
                         <div className="space-y-2">
@@ -1196,7 +1289,7 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
                           className={`h-8 text-xs flex-1 ${
                             message.parsedData.type === "delete" 
                               ? "bg-danger hover:bg-danger/90 text-white" 
-                              : message.parsedData.type === "edit"
+                              : message.parsedData.type === "edit" || message.parsedData.type === "multi_edit"
                               ? "bg-gold hover:bg-gold/90 text-black"
                               : message.parsedData.type === "weight"
                               ? "bg-blue-500 hover:bg-blue-500/90 text-white"
@@ -1204,8 +1297,8 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
                           }`}
                         >
                           {confirmingId === message.id 
-                            ? (message.parsedData.type === "edit" ? "Updating..." : message.parsedData.type === "delete" ? "Deleting..." : message.parsedData.type === "weight" ? "Saving..." : "Logging...")
-                            : message.parsedData.type === "edit" 
+                            ? (message.parsedData.type === "edit" || message.parsedData.type === "multi_edit" ? "Updating..." : message.parsedData.type === "delete" ? "Deleting..." : message.parsedData.type === "weight" ? "Saving..." : "Logging...")
+                            : message.parsedData.type === "edit" || message.parsedData.type === "multi_edit"
                             ? "✓ Update" 
                             : message.parsedData.type === "delete" 
                             ? "✓ Delete" 

@@ -93,10 +93,35 @@ const SYSTEM_PROMPT = `You are a nutrition and fitness assistant for a calorie t
 - Use appropriate activity emojis
 
 ## For EDIT/CORRECTION requests:
-When user wants to correct a previous entry:
-- Identify item to edit (search_term)
-- Identify values to update
+When user wants to correct a previous entry (e.g., "the rice cakes had 70 cals each", "I think the banana is more like 70 calories", "actually each tuna can was 17g protein"):
+- Identify item(s) to edit (search_term) - use a keyword that will match the logged entry
+- Identify ALL values to update (calories, protein, or both)
 - Use type "edit"
+- If multiple items mentioned, handle each one
+
+Response format for EDIT:
+{
+  "type": "edit",
+  "search_term": "rice cake",
+  "updates": { "calories": 70, "protein": 1 },
+  "items": [],
+  "total_calories": 0,
+  "total_protein": 0,
+  "message": "📝 I'll update your rice cake entries to 70 cal each."
+}
+
+For MULTIPLE edits in one message (e.g., "rice cakes were 70 cal, banana was 70 cal"):
+{
+  "type": "multi_edit",
+  "edits": [
+    { "search_term": "rice cake", "updates": { "calories": 70 } },
+    { "search_term": "banana", "updates": { "calories": 70 } }
+  ],
+  "items": [],
+  "total_calories": 0,
+  "total_protein": 0,
+  "message": "📝 I'll update your rice cake and banana entries."
+}
 
 ## For DELETE requests:
 When user wants to remove an entry:
@@ -134,8 +159,24 @@ export async function POST(request: Request) {
 
     // Check for edit/delete/weight operations first (don't need nutrition lookup)
     const lowerMessage = message.toLowerCase();
-    const isEdit = /\b(update|change|correct|actually|edit|modify|fix|adjust)\b/.test(lowerMessage) && 
-                   !/\b(i ate|i had|i eat|just had|for breakfast|for lunch|for dinner)\b/.test(lowerMessage);
+    
+    // Expanded edit detection - catches conversational corrections
+    const editPatterns = [
+      /\b(update|change|correct|actually|edit|modify|fix|adjust)\b/,  // Direct edit words
+      /\bi think\b.*\b(is|was|should be|more like|actually)\b/,  // "I think X is more like Y"
+      /\b(had|has|have)\b.*\b(\d+)\s*(cal|kcal|calories)\b.*each/,  // "X had 70 cals each"
+      /\bmore like\b.*\d+/,  // "more like 70 calories"
+      /\bshould\s*(be|have)\b/,  // "should be 70 cal"
+      /\bwas\s*(actually|really)\b/,  // "was actually 100 cal"
+      /\bnot\s*\d+/,  // "not 100 calories"
+      /\binstead\s*of\b/,  // "instead of 100"
+      /\bwrong\b|\bmistake\b/,  // "that's wrong"
+      /\beach\s*(had|has|is|was|were)\b.*\d+/,  // "each had 70 cal"
+      /\bper\s*(cake|item|piece|serving)\b.*\d+/,  // "per cake is 70"
+    ];
+    
+    const isEdit = editPatterns.some(pattern => pattern.test(lowerMessage)) && 
+                   !/^(?:i ate|i had|i eat|just had|for breakfast|for lunch|for dinner)\b/.test(lowerMessage.trim());
     const isDelete = /\b(delete|remove|undo)\b/.test(lowerMessage);
     const isExercise = /\b(run|walk|jog|bike|swim|workout|exercise|gym|cycling|hiit|yoga|lift|weights)\b/.test(lowerMessage);
     
