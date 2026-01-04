@@ -273,20 +273,32 @@
   }
   
   /* Scrollbar styling */
-  .custom-scrollbar::-webkit-scrollbar {
-    width: 6px;
+  /* Hide all scrollbars globally */
+  * {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE and Edge */
   }
   
-  .custom-scrollbar::-webkit-scrollbar-track {
-    background: var(--background);
+  *::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
   }
   
-  .custom-scrollbar::-webkit-scrollbar-thumb {
+  /* Optional: Show thin scrollbar on hover for specific containers if needed */
+  .show-scrollbar-on-hover::-webkit-scrollbar {
+    width: 4px;
+    display: none;
+  }
+  
+  .show-scrollbar-on-hover:hover::-webkit-scrollbar {
+    display: block;
+  }
+  
+  .show-scrollbar-on-hover::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .show-scrollbar-on-hover::-webkit-scrollbar-thumb {
     background: var(--border);
-    border-radius: 3px;
-  }
-  
-  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: var(--muted-foreground);
+    border-radius: 2px;
   }
 }
