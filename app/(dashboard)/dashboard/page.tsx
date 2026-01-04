@@ -1228,32 +1228,33 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
           onConflict: "user_id,name",
         });
 
-      if (error) {
-        console.error("Error saving meal:", error);
-        setMessages(prev => [...prev, {
-          id: Date.now().toString(),
-          role: "assistant",
-          content: "❌ Error saving meal. Please try again.",
-          timestamp: new Date().toISOString(),
-        }]);
-      } else {
-        // Refresh saved meals list
-        loadSavedMeals();
-        
-        setMessages(prev => [...prev, {
-          id: Date.now().toString(),
-          role: "assistant",
-          content: `✅ Saved **"${mealName}"**!\n\n📊 ${data.total_calories} cal • ${data.total_protein}g protein\n📝 ${summary}\n\nType **@${normalizedName}** anytime to log this meal!`,
-          timestamp: new Date().toISOString(),
-        }]);
-        showToast(`Saved meal: ${mealName}`, "food");
+        if (error) {
+          console.error("Error saving meal:", error);
+          setMessages(prev => [...prev, {
+            id: Date.now().toString(),
+            role: "assistant",
+            content: "❌ Error saving meal. Please try again.",
+            timestamp: new Date().toISOString(),
+          }]);
+        } else {
+          // Refresh saved meals list
+          loadSavedMeals();
+          
+          setMessages(prev => [...prev, {
+            id: Date.now().toString(),
+            role: "assistant",
+            content: `✅ Saved **"${presetName}"**!\n\n📊 ${data.total_calories} cal • ${data.total_protein}g protein\n📝 ${summary}\n\nType **@${normalizedName}** anytime to log this meal!`,
+            timestamp: new Date().toISOString(),
+          }]);
+          showToast(`Saved meal: ${presetName}`, "food");
+        }
       }
     } catch (error) {
-      console.error("Error creating meal:", error);
+      console.error("Error creating preset:", error);
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
         role: "assistant",
-        content: "❌ Error creating meal. Please try again.",
+        content: "❌ Error saving. Please try again.",
         timestamp: new Date().toISOString(),
       }]);
     }
