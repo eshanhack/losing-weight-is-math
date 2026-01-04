@@ -918,6 +918,7 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
   const [mealFilter, setMealFilter] = useState("");
   const [selectedMealIndex, setSelectedMealIndex] = useState(0);
   const [pendingSaveMeal, setPendingSaveMeal] = useState<{ items: Array<{ description: string; calories: number; protein: number; emoji: string }>; totalCal: number; totalProtein: number } | null>(null);
+  const usedSavedMealRef = useRef(false); // Track if current input came from @ mention
   
   // Use a REF to track if weight reminder has been checked - refs persist and don't cause re-renders
   const weightReminderCheckedRef = useRef(false);
@@ -984,6 +985,7 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
     setInput(beforeAt + meal.description);
     setShowMealDropdown(false);
     setMealFilter("");
+    usedSavedMealRef.current = true; // Mark that this came from a saved meal
     inputRef.current?.focus();
   };
 
@@ -2040,8 +2042,9 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
         }
 
         // SAVE MEAL SUGGESTION: After logging food with 2+ items, offer to save as a quick meal
+        // BUT only if this wasn't already from a saved meal (@ mention)
         const foodItems = parsedData.items as Array<{ description: string; calories: number; protein: number; emoji?: string }>;
-        if (foodItems.length >= 2) {
+        if (foodItems.length >= 2 && !usedSavedMealRef.current) {
           const totalCal = foodItems.reduce((sum, i) => sum + i.calories, 0);
           const totalProtein = foodItems.reduce((sum, i) => sum + i.protein, 0);
           
@@ -2069,6 +2072,9 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
             ]);
           }, 2500); // After coaching message
         }
+        
+        // Reset the saved meal flag after logging
+        usedSavedMealRef.current = false;
       }
 
       // Trigger dashboard refresh WITHOUT page reload
