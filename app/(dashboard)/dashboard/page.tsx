@@ -554,13 +554,13 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
     loadChatHistory();
   }, []);
   
-  // Check weight reminder ONLY once after data has loaded
-  useEffect(() => {
-    if (dataLoaded && !weightReminderShown) {
-      // Double-check by querying database directly - don't trust props timing
-      checkWeightReminderFromDB();
-    }
-  }, [dataLoaded]);
+  // DISABLED: Weight reminder was causing issues - showing even when weight was logged
+  // TODO: Re-implement properly after investigating root cause
+  // useEffect(() => {
+  //   if (dataLoaded && !weightReminderShown) {
+  //     checkWeightReminderFromDB();
+  //   }
+  // }, [dataLoaded]);
   
   // Check for trial upgrade reminder (2 days or less before expiry)
   useEffect(() => {
