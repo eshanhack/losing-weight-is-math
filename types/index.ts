@@ -186,11 +186,18 @@ export interface ParsedExercise {
 }
 
 export interface AIParseResponse {
-  type: 'food' | 'exercise';
+  type: 'food' | 'exercise' | 'edit' | 'delete';
   items: ParsedFoodItem[] | ParsedExercise[];
   total_calories: number;
   total_protein: number;
   message: string;
+  // For edit/delete operations
+  search_term?: string;
+  updates?: {
+    calories?: number;
+    protein?: number;
+    description?: string;
+  };
 }
 
 // ============================================================================

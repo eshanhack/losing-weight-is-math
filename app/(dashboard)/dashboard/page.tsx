@@ -614,11 +614,38 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
     setLoading(false);
   };
 
+  // Helper to recalculate and update daily log totals
+  const recalculateDailyTotals = async (supabase: ReturnType<typeof createClient>, logId: string) => {
+    const { data: allEntries } = await supabase
+      .from("log_entries")
+      .select("*")
+      .eq("daily_log_id", logId);
+
+    if (allEntries) {
+      const foodEntries = allEntries.filter((e) => e.entry_type === "food");
+      const exerciseEntries = allEntries.filter((e) => e.entry_type === "exercise");
+
+      const totalIntake = foodEntries.reduce((sum, e) => sum + (e.calories || 0), 0);
+      const totalOuttake = exerciseEntries.reduce((sum, e) => sum + (e.calories || 0), 0);
+      const totalProtein = foodEntries.reduce((sum, e) => sum + (e.protein_grams || 0), 0);
+
+      await supabase
+        .from("daily_logs")
+        .update({
+          caloric_intake: totalIntake,
+          caloric_outtake: totalOuttake,
+          protein_grams: totalProtein,
+        })
+        .eq("id", logId);
+    }
+  };
+
   const handleConfirm = async (messageId: string) => {
     const message = messages.find((m) => m.id === messageId);
     if (!message?.parsedData || confirmingId) return;
 
     setConfirmingId(messageId);
+    const parsedData = message.parsedData;
 
     try {
       const supabase = createClient();
@@ -630,7 +657,9 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
 
       // Use LOCAL date for the log
       const localToday = getLocalDateString();
+      let confirmationContent = "";
 
+      // Get or create today's log
       let { data: log } = await supabase
         .from("daily_logs")
         .select("*")
@@ -658,45 +687,107 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
         return;
       }
 
-      // Insert entries
-      const entries = message.parsedData.items.map((item) => ({
-        daily_log_id: log.id,
-        entry_type: message.parsedData!.type,
-        description: item.description,
-        calories: item.calories,
-        protein_grams: "protein" in item ? item.protein : 0,
-        ai_parsed: true,
-      }));
+      // Handle different operation types
+      if (parsedData.type === "edit" && parsedData.search_term) {
+        // EDIT OPERATION: Find and update matching entries
+        const searchTerm = parsedData.search_term.toLowerCase();
+        
+        // Find entries matching the search term
+        const { data: matchingEntries, error: searchError } = await supabase
+          .from("log_entries")
+          .select("*")
+          .eq("daily_log_id", log.id)
+          .ilike("description", `%${searchTerm}%`);
 
-      const { error: insertError } = await supabase.from("log_entries").insert(entries);
-      if (insertError) {
-        console.error("Error inserting entries:", insertError);
-        setConfirmingId(null);
-        return;
-      }
+        if (searchError || !matchingEntries || matchingEntries.length === 0) {
+          confirmationContent = `❌ Couldn't find any entries matching "${parsedData.search_term}" in today's log.`;
+        } else {
+          // Update all matching entries
+          const updates: Record<string, number> = {};
+          if (parsedData.updates?.calories !== undefined) {
+            updates.calories = parsedData.updates.calories;
+          }
+          if (parsedData.updates?.protein !== undefined) {
+            updates.protein_grams = parsedData.updates.protein;
+          }
 
-      // Get all entries and recalculate totals
-      const { data: allEntries } = await supabase
-        .from("log_entries")
-        .select("*")
-        .eq("daily_log_id", log.id);
+          const entryIds = matchingEntries.map(e => e.id);
+          const { error: updateError } = await supabase
+            .from("log_entries")
+            .update(updates)
+            .in("id", entryIds);
 
-      if (allEntries) {
-        const foodEntries = allEntries.filter((e) => e.entry_type === "food");
-        const exerciseEntries = allEntries.filter((e) => e.entry_type === "exercise");
+          if (updateError) {
+            console.error("Error updating entries:", updateError);
+            confirmationContent = "❌ Error updating entries. Please try again.";
+          } else {
+            // Recalculate totals
+            await recalculateDailyTotals(supabase, log.id);
+            
+            const updatedCount = matchingEntries.length;
+            const updateParts = [];
+            if (parsedData.updates?.calories !== undefined) {
+              updateParts.push(`${parsedData.updates.calories} cal`);
+            }
+            if (parsedData.updates?.protein !== undefined) {
+              updateParts.push(`${parsedData.updates.protein}g protein`);
+            }
+            confirmationContent = `✅ Updated ${updatedCount} "${parsedData.search_term}" ${updatedCount === 1 ? "entry" : "entries"} to ${updateParts.join(" and ")}!`;
+          }
+        }
 
-        const totalIntake = foodEntries.reduce((sum, e) => sum + (e.calories || 0), 0);
-        const totalOuttake = exerciseEntries.reduce((sum, e) => sum + (e.calories || 0), 0);
-        const totalProtein = foodEntries.reduce((sum, e) => sum + (e.protein_grams || 0), 0);
+      } else if (parsedData.type === "delete" && parsedData.search_term) {
+        // DELETE OPERATION: Find and delete matching entries
+        const searchTerm = parsedData.search_term.toLowerCase();
+        
+        const { data: matchingEntries, error: searchError } = await supabase
+          .from("log_entries")
+          .select("*")
+          .eq("daily_log_id", log.id)
+          .ilike("description", `%${searchTerm}%`);
 
-        await supabase
-          .from("daily_logs")
-          .update({
-            caloric_intake: totalIntake,
-            caloric_outtake: totalOuttake,
-            protein_grams: totalProtein,
-          })
-          .eq("id", log.id);
+        if (searchError || !matchingEntries || matchingEntries.length === 0) {
+          confirmationContent = `❌ Couldn't find any entries matching "${parsedData.search_term}" in today's log.`;
+        } else {
+          const entryIds = matchingEntries.map(e => e.id);
+          const { error: deleteError } = await supabase
+            .from("log_entries")
+            .delete()
+            .in("id", entryIds);
+
+          if (deleteError) {
+            console.error("Error deleting entries:", deleteError);
+            confirmationContent = "❌ Error deleting entries. Please try again.";
+          } else {
+            // Recalculate totals
+            await recalculateDailyTotals(supabase, log.id);
+            
+            const deletedCount = matchingEntries.length;
+            confirmationContent = `🗑️ Deleted ${deletedCount} "${parsedData.search_term}" ${deletedCount === 1 ? "entry" : "entries"}!`;
+          }
+        }
+
+      } else {
+        // NEW ENTRY OPERATION (food or exercise)
+        const entries = parsedData.items.map((item) => ({
+          daily_log_id: log.id,
+          entry_type: parsedData.type as "food" | "exercise",
+          description: item.description,
+          calories: item.calories,
+          protein_grams: "protein" in item ? item.protein : 0,
+          ai_parsed: true,
+        }));
+
+        const { error: insertError } = await supabase.from("log_entries").insert(entries);
+        if (insertError) {
+          console.error("Error inserting entries:", insertError);
+          setConfirmingId(null);
+          return;
+        }
+
+        // Recalculate totals
+        await recalculateDailyTotals(supabase, log.id);
+        confirmationContent = "✅ Logged! What else did you have?";
       }
 
       // Mark message as confirmed in local state
@@ -705,7 +796,6 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
       );
 
       // Save confirmation message to database
-      const confirmationContent = "✅ Logged! What else did you have?";
       await supabase.from("chat_messages").insert({
         user_id: user.id,
         role: "assistant",
@@ -794,31 +884,82 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
 
                   {message.parsedData && !message.confirmed && (
                     <div className="mt-3 pt-3 border-t border-white/10">
-                      <div className="space-y-1.5">
-                        {message.parsedData.items.map((item, idx) => (
-                          <div key={idx} className="flex justify-between gap-3 text-xs">
-                            <span className="truncate opacity-90">{item.description}</span>
-                            <div className="flex gap-2 shrink-0">
-                              <span className="font-medium">{item.calories} cal</span>
-                              {"protein" in item && item.protein > 0 && (
-                                <span className="text-muted-foreground">{item.protein}g</span>
-                              )}
-                            </div>
+                      {/* For EDIT operations */}
+                      {message.parsedData.type === "edit" && message.parsedData.search_term && (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2 text-xs">
+                            <span className="text-lg">📝</span>
+                            <span>Update entries matching <strong>"{message.parsedData.search_term}"</strong></span>
                           </div>
-                        ))}
-                        <div className="pt-1 mt-1 border-t border-white/5 flex justify-between text-xs font-semibold">
-                          <span>Total</span>
-                          <span>{message.parsedData.total_calories} cal / {message.parsedData.total_protein}g protein</span>
+                          <div className="bg-white/5 rounded-lg p-2 space-y-1 text-xs">
+                            {message.parsedData.updates?.calories !== undefined && (
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">New calories:</span>
+                                <span className="font-medium">{message.parsedData.updates.calories} cal</span>
+                              </div>
+                            )}
+                            {message.parsedData.updates?.protein !== undefined && (
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">New protein:</span>
+                                <span className="font-medium">{message.parsedData.updates.protein}g</span>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
+                      )}
+
+                      {/* For DELETE operations */}
+                      {message.parsedData.type === "delete" && message.parsedData.search_term && (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2 text-xs text-danger">
+                            <span className="text-lg">🗑️</span>
+                            <span>Delete entries matching <strong>"{message.parsedData.search_term}"</strong></span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* For NEW ENTRIES (food/exercise) */}
+                      {(message.parsedData.type === "food" || message.parsedData.type === "exercise") && (
+                        <div className="space-y-1.5">
+                          {message.parsedData.items.map((item, idx) => (
+                            <div key={idx} className="flex justify-between gap-3 text-xs">
+                              <span className="truncate opacity-90">{item.description}</span>
+                              <div className="flex gap-2 shrink-0">
+                                <span className="font-medium">{item.calories} cal</span>
+                                {"protein" in item && item.protein > 0 && (
+                                  <span className="text-muted-foreground">{item.protein}g</span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                          <div className="pt-1 mt-1 border-t border-white/5 flex justify-between text-xs font-semibold">
+                            <span>Total</span>
+                            <span>{message.parsedData.total_calories} cal / {message.parsedData.total_protein}g protein</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Action Buttons */}
                       <div className="mt-3 flex gap-2">
                         <Button
                           size="sm"
                           onClick={() => handleConfirm(message.id)}
                           disabled={confirmingId === message.id}
-                          className="h-8 text-xs bg-success hover:bg-success/90 text-white flex-1"
+                          className={`h-8 text-xs flex-1 ${
+                            message.parsedData.type === "delete" 
+                              ? "bg-danger hover:bg-danger/90 text-white" 
+                              : message.parsedData.type === "edit"
+                              ? "bg-gold hover:bg-gold/90 text-black"
+                              : "bg-success hover:bg-success/90 text-white"
+                          }`}
                         >
-                          {confirmingId === message.id ? "Logging..." : "✓ Log this"}
+                          {confirmingId === message.id 
+                            ? (message.parsedData.type === "edit" ? "Updating..." : message.parsedData.type === "delete" ? "Deleting..." : "Logging...")
+                            : message.parsedData.type === "edit" 
+                            ? "✓ Update" 
+                            : message.parsedData.type === "delete" 
+                            ? "✓ Delete" 
+                            : "✓ Log this"}
                         </Button>
                         <Button 
                           size="sm" 
@@ -826,7 +967,7 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
                           onClick={() => handleReject(message.id)}
                           className="h-8 text-xs border-white/20 hover:bg-white/10"
                         >
-                          ✗ Edit
+                          ✗ Cancel
                         </Button>
                       </div>
                     </div>
