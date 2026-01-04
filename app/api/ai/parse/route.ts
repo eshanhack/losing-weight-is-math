@@ -165,6 +165,22 @@ Response format for CHEAT_CALCULATION:
   "message": "🍔 Let me calculate the impact of that Big Mac for you..."
 }
 
+## For ACTIVITY/BURN QUESTIONS:
+When user asks how to burn calories or what exercise to do:
+- Examples: "what can I do to burn 312 calories?", "how do I burn 500 cal?", "what exercise burns X calories?", "I need to burn 200"
+- Extract the calorie amount they want to burn
+- Use type "activity_suggestion"
+- Return the calories to burn in total_calories field
+
+Response format for ACTIVITY_SUGGESTION:
+{
+  "type": "activity_suggestion",
+  "items": [],
+  "total_calories": 312,
+  "total_protein": 0,
+  "message": "Here are some ways to burn 312 calories..."
+}
+
 ## For NEW FOOD entries:
 - Identify EACH food item mentioned, even in long lists
 - If user provides protein amounts, use those exact values

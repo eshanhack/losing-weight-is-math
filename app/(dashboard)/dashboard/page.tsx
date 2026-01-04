@@ -913,6 +913,63 @@ function generateCheatMealImpact(ctx: CheatMealContext): string {
 }
 
 // ============================================================================
+// ACTIVITY SUGGESTION GENERATOR
+// ============================================================================
+
+function generateActivitySuggestions(caloriesToBurn: number): string {
+  // Activity calories burned estimates (per minute, average adult)
+  const activities = [
+    { name: "Walking", emoji: "🚶", calPerMin: 4, description: "casual pace, 3 mph" },
+    { name: "Brisk walking", emoji: "🚶‍♂️", calPerMin: 5.5, description: "fast pace, 4 mph" },
+    { name: "Jogging", emoji: "🏃", calPerMin: 9, description: "light jog, 5 mph" },
+    { name: "Running", emoji: "🏃‍♂️", calPerMin: 12, description: "moderate pace, 6-7 mph" },
+    { name: "Cycling", emoji: "🚴", calPerMin: 8, description: "moderate effort" },
+    { name: "Swimming", emoji: "🏊", calPerMin: 10, description: "moderate laps" },
+    { name: "HIIT workout", emoji: "💪", calPerMin: 14, description: "high intensity intervals" },
+    { name: "Jump rope", emoji: "⏱️", calPerMin: 12, description: "moderate pace" },
+    { name: "Dancing", emoji: "💃", calPerMin: 7, description: "active dancing" },
+    { name: "Stair climbing", emoji: "🪜", calPerMin: 9, description: "climbing stairs" },
+  ];
+
+  let message = `🔥 **Ways to burn ${caloriesToBurn} calories:**\n\n`;
+
+  // Generate suggestions for each activity
+  const suggestions: string[] = [];
+  
+  for (const activity of activities) {
+    const minutes = Math.ceil(caloriesToBurn / activity.calPerMin);
+    
+    // Only show reasonable durations (up to 2 hours)
+    if (minutes <= 120) {
+      const hours = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      const timeStr = hours > 0 
+        ? (mins > 0 ? `${hours}h ${mins}min` : `${hours}h`)
+        : `${minutes} min`;
+      
+      suggestions.push(`${activity.emoji} **${activity.name}** — ${timeStr}\n   _${activity.description}_`);
+    }
+  }
+
+  message += suggestions.slice(0, 6).join("\n\n");
+
+  // Add helpful tips based on calorie amount
+  message += "\n\n━━━━━━━━━━━━━━━━━━━━━━\n";
+  
+  if (caloriesToBurn <= 150) {
+    message += "💡 **Tip:** This is easily achievable with a short walk! Even taking the stairs or parking farther away adds up.";
+  } else if (caloriesToBurn <= 300) {
+    message += "💡 **Tip:** A 30-45 min walk or 20 min jog would do it. Consider breaking it into two shorter sessions!";
+  } else if (caloriesToBurn <= 500) {
+    message += "💡 **Tip:** This is a solid workout! Combine activities—like a 20 min walk + 15 min HIIT—to make it more enjoyable.";
+  } else {
+    message += "💡 **Tip:** This is a big burn! Consider spreading it across the day or combining eating less with exercise.";
+  }
+
+  return message;
+}
+
+// ============================================================================
 // AI DIARY COMPONENT
 // ============================================================================
 
@@ -1624,6 +1681,13 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
           });
         }
         // Keep the parsed data so user can choose to log it
+      }
+
+      // ACTIVITY SUGGESTION: Generate exercise recommendations to burn X calories
+      if (data.type === "activity_suggestion" && data.total_calories > 0) {
+        finalMessage = generateActivitySuggestions(data.total_calories);
+        // Mark as chat since it's just information
+        finalParsedData = { ...data, type: "chat" as const };
       }
 
       const assistantMessage: ChatMessage = {
