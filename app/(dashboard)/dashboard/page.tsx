@@ -776,6 +776,15 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
           ? data.edits 
           : [{ search_term: data.search_term!, updates: data.updates! }];
         
+        // Helper to extract quantity from description (e.g., "3 rice cakes" → 3)
+        const extractQuantity = (description: string): number => {
+          const match = description.match(/^(\d+)\s+/);
+          return match ? parseInt(match[1], 10) : 1;
+        };
+        
+        // Check if user said "each" - meaning per-unit values
+        const isPerUnit = /\beach\b|\bper\b|\bone\b|\bsingle\b/i.test(input);
+        
         // Create updated items
         const updatedItems = [...(pendingLog.parsedData!.items as Array<{ description: string; calories: number; protein: number; emoji: string }>)];
         const updatedItemNames: string[] = [];
@@ -786,11 +795,14 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
           // Find matching items in the pending log
           for (let i = 0; i < updatedItems.length; i++) {
             if (updatedItems[i].description.toLowerCase().includes(searchTerm)) {
+              const quantity = extractQuantity(updatedItems[i].description);
+              const multiplier = isPerUnit ? quantity : 1;
+              
               if (edit.updates?.calories !== undefined) {
-                updatedItems[i] = { ...updatedItems[i], calories: edit.updates.calories };
+                updatedItems[i] = { ...updatedItems[i], calories: edit.updates.calories * multiplier };
               }
               if (edit.updates?.protein !== undefined) {
-                updatedItems[i] = { ...updatedItems[i], protein: edit.updates.protein };
+                updatedItems[i] = { ...updatedItems[i], protein: edit.updates.protein * multiplier };
               }
               updatedItemNames.push(updatedItems[i].description);
             }

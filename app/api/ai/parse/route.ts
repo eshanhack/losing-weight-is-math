@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import type { AIParseResponse } from "@/types";
+import { createClient } from "@supabase/supabase-js";
 
 // Lazy initialization of OpenAI client
 function getOpenAI() {
@@ -9,6 +10,53 @@ function getOpenAI() {
     return null;
   }
   return new OpenAI({ apiKey });
+}
+
+// Create Supabase client for server-side operations
+function getSupabase() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !supabaseKey) {
+    return null;
+  }
+  return createClient(supabaseUrl, supabaseKey);
+}
+
+// User food memory - stores user's personal food nutrition data
+interface UserFoodMemory {
+  id: string;
+  user_id: string;
+  food_name: string; // normalized name (lowercase, trimmed)
+  display_name: string; // how user typed it
+  calories: number;
+  protein_grams: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// Get user's personalized food memory
+async function getUserFoodMemory(userId: string, foodTerms: string[]): Promise<UserFoodMemory[]> {
+  const supabase = getSupabase();
+  if (!supabase || !userId || foodTerms.length === 0) return [];
+  
+  try {
+    // Search for matching food items in user's memory
+    const { data, error } = await supabase
+      .from("user_food_memory")
+      .select("*")
+      .eq("user_id", userId)
+      .or(foodTerms.map(term => `food_name.ilike.%${term.toLowerCase()}%`).join(","));
+    
+    if (error) {
+      console.error("Error fetching user food memory:", error);
+      return [];
+    }
+    
+    return data || [];
+  } catch (error) {
+    console.error("Error in getUserFoodMemory:", error);
+    return [];
+  }
 }
 
 // API Ninjas Nutrition API for accurate nutrition data
@@ -98,6 +146,7 @@ When user wants to correct a previous entry (e.g., "the rice cakes had 70 cals e
 - Identify ALL values to update (calories, protein, or both)
 - Use type "edit"
 - If multiple items mentioned, handle each one
+- IMPORTANT: Always return PER-UNIT values in updates. If user says "each rice cake is 70 cal", return 70, not the multiplied total. The frontend handles quantity multiplication.
 
 Response format for EDIT:
 {
@@ -110,12 +159,12 @@ Response format for EDIT:
   "message": "📝 I'll update your rice cake entries to 70 cal each."
 }
 
-For MULTIPLE edits in one message (e.g., "rice cakes were 70 cal, banana was 70 cal"):
+For MULTIPLE edits in one message (e.g., "rice cakes were 70 cal each, banana was 80 cal"):
 {
   "type": "multi_edit",
   "edits": [
     { "search_term": "rice cake", "updates": { "calories": 70 } },
-    { "search_term": "banana", "updates": { "calories": 70 } }
+    { "search_term": "banana", "updates": { "calories": 80 } }
   ],
   "items": [],
   "total_calories": 0,
@@ -148,7 +197,7 @@ Only respond with valid JSON, no additional text.`;
 
 export async function POST(request: Request) {
   try {
-    const { message } = await request.json();
+    const { message, user_id } = await request.json();
 
     if (!message) {
       return NextResponse.json(
@@ -199,17 +248,39 @@ export async function POST(request: Request) {
       }
     }
 
-    // For food entries, get accurate nutrition data from API Ninjas
+    // For food entries, get accurate nutrition data from API Ninjas AND user's personal memory
     let nutritionContext = "";
+    let userMemoryContext = "";
+    
     if (!isEdit && !isDelete && !isExercise) {
+      // Extract potential food terms from the message for user memory lookup
+      const foodTerms = message
+        .toLowerCase()
+        .replace(/[^\w\s]/g, " ")
+        .split(/\s+/)
+        .filter((word: string) => word.length > 2 && !["and", "with", "the", "for", "ate", "had", "some", "few"].includes(word));
+      
+      // Check user's personalized food memory FIRST (highest priority)
+      if (user_id && foodTerms.length > 0) {
+        const userMemory = await getUserFoodMemory(user_id, foodTerms);
+        if (userMemory.length > 0) {
+          userMemoryContext = `\n\n## USER'S PERSONAL FOOD DATA (HIGHEST PRIORITY - always use these over API data):
+${userMemory.map(item => 
+  `- ${item.display_name}: ${item.calories} cal, ${item.protein_grams}g protein (user's custom values)`
+).join("\n")}
+
+CRITICAL: The user has previously corrected these food values. ALWAYS use the USER'S PERSONAL FOOD DATA above for these items!`;
+        }
+      }
+      
       const nutritionData = await getNutritionData(message);
       if (nutritionData.length > 0) {
-        nutritionContext = `\n\n## VERIFIED NUTRITION DATA (from API Ninjas database - USE THESE VALUES):
+        nutritionContext = `\n\n## VERIFIED NUTRITION DATA (from API Ninjas database - use if not in user's personal data):
 ${nutritionData.map(item => 
   `- ${item.name}: ${Math.round(item.calories)} cal, ${Math.round(item.protein_g)}g protein per ${item.serving_size_g}g serving`
 ).join("\n")}
 
-IMPORTANT: Use the verified nutrition data above for accuracy. Only estimate if an item isn't in the verified data.`;
+Use the verified nutrition data above for accuracy. Only estimate if an item isn't in the verified data.`;
       }
     }
 
@@ -225,8 +296,8 @@ IMPORTANT: Use the verified nutrition data above for accuracy. Only estimate if 
       return NextResponse.json(getMockResponse(message));
     }
 
-    // Build the prompt with nutrition context
-    const enhancedPrompt = SYSTEM_PROMPT + nutritionContext;
+    // Build the prompt with user memory (highest priority) + nutrition context
+    const enhancedPrompt = SYSTEM_PROMPT + userMemoryContext + nutritionContext;
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
