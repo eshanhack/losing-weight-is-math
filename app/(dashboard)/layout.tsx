@@ -216,8 +216,8 @@ export const useDashboard = () => useContext(DashboardContext);
 // Mobile bottom tabs
 const MOBILE_TABS = [
   { href: "/dashboard", label: "Dashboard", icon: "📊" },
+  { href: "/dashboard/progress", label: "Progress", icon: "📈" },
   { href: "/dashboard/diary", label: "AI Diary", icon: "💬" },
-  { href: "/dashboard/notifications", label: "Activity", icon: "🔔" },
   { href: "/dashboard/settings", label: "Settings", icon: "⚙️" },
 ] as const;
 
@@ -361,6 +361,7 @@ export default function DashboardLayout({
             <nav className="flex items-center gap-1">
               {[
                 { href: "/dashboard", label: "DASHBOARD" },
+                { href: "/dashboard/progress", label: "PROGRESS" },
                 { href: "/dashboard/diary", label: "AI DIARY" },
                 { href: "/dashboard/notifications", label: "ACTIVITY" },
                 { href: "/dashboard/settings", label: "SETTINGS" },
