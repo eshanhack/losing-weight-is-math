@@ -554,12 +554,13 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
     loadChatHistory();
   }, []);
   
-  // Check weight reminder ONLY after data has loaded
+  // Check weight reminder ONLY once after data has loaded
   useEffect(() => {
-    if (dataLoaded) {
-      checkWeightReminder();
+    if (dataLoaded && !weightReminderShown) {
+      // Double-check by querying database directly - don't trust props timing
+      checkWeightReminderFromDB();
     }
-  }, [todayHasWeight, dataLoaded]);
+  }, [dataLoaded]);
   
   // Check for trial upgrade reminder (2 days or less before expiry)
   useEffect(() => {
@@ -607,43 +608,56 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Check if we should remind user to log their weight
-  const checkWeightReminder = () => {
+  // Check if we should remind user to log their weight - queries DB directly for accuracy
+  const checkWeightReminderFromDB = async () => {
     // Only check if it's past 9am local time
     const now = new Date();
     const currentHour = now.getHours();
     if (currentHour < 9) return;
 
-    // If weight is already logged today, don't show reminder
-    if (todayHasWeight) {
+    // Already shown? Don't show again
+    if (weightReminderShown) return;
+
+    // Query database directly to check if weight is logged for today
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data: todayLog } = await supabase
+      .from("daily_logs")
+      .select("weight_kg")
+      .eq("user_id", user.id)
+      .eq("log_date", today)
+      .maybeSingle();
+
+    // If weight is logged, don't show reminder
+    if (todayLog && todayLog.weight_kg !== null && todayLog.weight_kg !== undefined) {
       return;
     }
 
-    // If no weight logged today and we haven't shown the reminder yet
-    if (!weightReminderShown) {
-      setWeightReminderShown(true);
-      
-      // Get appropriate greeting based on time of day
-      let greeting = "Good morning";
-      if (currentHour >= 12 && currentHour < 17) {
-        greeting = "Good afternoon";
-      } else if (currentHour >= 17) {
-        greeting = "Good evening";
-      }
-      
-      // Add reminder message after a short delay so it appears after welcome
-      setTimeout(() => {
-        setMessages(prev => [
-          ...prev,
-          {
-            id: "weight-reminder-" + Date.now(),
-            role: "assistant",
-            content: `⚖️ ${greeting}! Have you weighed yourself today? Just tell me your weight (e.g., "I weigh 82kg" or "weight 80.5") and I'll log it for you!`,
-            timestamp: new Date().toISOString(),
-          }
-        ]);
-      }, 1500);
+    // No weight logged today - show reminder
+    setWeightReminderShown(true);
+    
+    // Get appropriate greeting based on time of day
+    let greeting = "Good morning";
+    if (currentHour >= 12 && currentHour < 17) {
+      greeting = "Good afternoon";
+    } else if (currentHour >= 17) {
+      greeting = "Good evening";
     }
+    
+    // Add reminder message after a short delay so it appears after welcome
+    setTimeout(() => {
+      setMessages(prev => [
+        ...prev,
+        {
+          id: "weight-reminder-" + Date.now(),
+          role: "assistant",
+          content: `⚖️ ${greeting}! Have you weighed yourself today? Just tell me your weight (e.g., "I weigh 82kg" or "weight 80.5") and I'll log it for you!`,
+          timestamp: new Date().toISOString(),
+        }
+      ]);
+    }, 1500);
   };
 
   const loadChatHistory = async () => {
