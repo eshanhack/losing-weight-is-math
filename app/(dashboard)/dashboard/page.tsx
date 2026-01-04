@@ -182,8 +182,8 @@ function DashboardStats({
   return (
     <div className="space-y-6 h-full custom-scrollbar">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-center justify-between gap-4">
+        <div className="shrink-0">
           <h1 className="font-display text-2xl lg:text-3xl font-semibold text-foreground">
             My Progress
           </h1>
@@ -191,9 +191,18 @@ function DashboardStats({
             Track your daily caloric balance
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="pill pill-success">Active</span>
-          <span className="pill pill-muted">This Week</span>
+        {/* Protein Progress Bar */}
+        <div className="flex-1 max-w-md hidden sm:block">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs text-muted-foreground flex items-center gap-1">
+              🥩 Protein
+            </span>
+            <span className="text-xs font-medium">
+              <span className={proteinProgress >= 100 ? "text-success" : "text-foreground"}>{stats.todayProtein}g</span>
+              <span className="text-muted-foreground"> / {stats.proteinGoal}g</span>
+            </span>
+          </div>
+          <ProgressBar value={stats.todayProtein} max={stats.proteinGoal} />
         </div>
       </div>
 
@@ -410,31 +419,6 @@ function DashboardStats({
           </Card>
         </motion.div>
       </div>
-
-      {/* Protein Progress Card */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.28 }}
-      >
-        <Card className="p-4 lg:p-5 bg-card border-border">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-3">
-              <div className="icon-container bg-success/10">
-                <span className="text-lg">🥩</span>
-              </div>
-              <div>
-                <h3 className="font-display font-semibold text-foreground">Protein Goal</h3>
-                <p className="text-sm text-muted-foreground">{stats.todayProtein}g of {stats.proteinGoal}g today</p>
-              </div>
-            </div>
-            <span className={`text-2xl font-display font-bold ${proteinProgress >= 100 ? "text-success" : "text-foreground"}`}>
-              {proteinProgress}%
-            </span>
-          </div>
-          <ProgressBar value={stats.todayProtein} max={stats.proteinGoal} />
-        </Card>
-      </motion.div>
 
       {/* Calendar - FitFuel style */}
       <motion.div
