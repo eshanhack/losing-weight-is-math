@@ -13,15 +13,28 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { createClient } from "@/lib/supabase/client";
 import { useDashboard } from "../../layout";
+import { useToast } from "@/components/ui/toast-provider";
 import type { Profile } from "@/types";
 
 export default function SettingsPage() {
   const { profile: contextProfile, subscription, refreshData } = useDashboard();
+  const { showToast } = useToast();
   const [profile, setProfile] = useState<Partial<Profile>>({});
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [showResetDialog, setShowResetDialog] = useState(false);
+  const [resetConfirmText, setResetConfirmText] = useState("");
+  const [resetting, setResetting] = useState(false);
 
   useEffect(() => {
     if (contextProfile) {
@@ -70,6 +83,75 @@ export default function SettingsPage() {
     const supabase = createClient();
     await supabase.auth.signOut();
     window.location.href = "/";
+  };
+
+  const handleResetAccount = async () => {
+    if (resetConfirmText !== "RESET") return;
+    
+    setResetting(true);
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      showToast("You must be logged in", "error");
+      setResetting(false);
+      return;
+    }
+
+    try {
+      // Delete all log entries first (they reference daily_logs)
+      const { data: logs } = await supabase
+        .from("daily_logs")
+        .select("id")
+        .eq("user_id", user.id);
+      
+      if (logs && logs.length > 0) {
+        const logIds = logs.map(l => l.id);
+        await supabase
+          .from("log_entries")
+          .delete()
+          .in("daily_log_id", logIds);
+      }
+
+      // Delete daily logs
+      await supabase
+        .from("daily_logs")
+        .delete()
+        .eq("user_id", user.id);
+
+      // Delete chat messages
+      await supabase
+        .from("chat_messages")
+        .delete()
+        .eq("user_id", user.id);
+
+      // Delete notifications
+      await supabase
+        .from("notifications")
+        .delete()
+        .eq("user_id", user.id);
+
+      // Reset current weight to starting weight in profile
+      if (contextProfile) {
+        await supabase
+          .from("profiles")
+          .update({ current_weight_kg: contextProfile.starting_weight_kg })
+          .eq("id", user.id);
+      }
+
+      showToast("Account data reset successfully!", "success");
+      setShowResetDialog(false);
+      setResetConfirmText("");
+      refreshData();
+      
+      // Reload the page to refresh everything
+      window.location.reload();
+    } catch (error) {
+      console.error("Error resetting account:", error);
+      showToast("Failed to reset account", "error");
+    } finally {
+      setResetting(false);
+    }
   };
 
   const trialDaysLeft = subscription?.trial_ends_at
@@ -268,15 +350,108 @@ export default function SettingsPage() {
         {/* Account Actions */}
         <Card className="p-4 bg-card border-border">
           <h2 className="font-display font-semibold mb-4">Account</h2>
+          <div className="space-y-3">
+            <Button
+              variant="outline"
+              onClick={handleLogout}
+              className="w-full"
+            >
+              Log Out
+            </Button>
+          </div>
+        </Card>
+
+        {/* Danger Zone */}
+        <Card className="p-4 bg-card border-danger/30">
+          <h2 className="font-display font-semibold mb-2 text-danger">Danger Zone</h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            Reset your account to start fresh. This will delete all your food logs, 
+            exercise entries, weight history, and chat messages. Your profile information 
+            (name, height, age, goals) will be kept.
+          </p>
           <Button
             variant="outline"
-            onClick={handleLogout}
+            onClick={() => setShowResetDialog(true)}
             className="w-full border-danger/30 text-danger hover:bg-danger/10"
           >
-            Log Out
+            🔄 Reset Account Data
           </Button>
         </Card>
       </motion.div>
+
+      {/* Reset Confirmation Dialog */}
+      <Dialog open={showResetDialog} onOpenChange={setShowResetDialog}>
+        <DialogContent className="bg-card border-border">
+          <DialogHeader>
+            <DialogTitle className="font-display text-danger flex items-center gap-2">
+              ⚠️ Reset Account Data
+            </DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              This action cannot be undone. This will permanently delete:
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4">
+            <ul className="space-y-2 text-sm">
+              <li className="flex items-center gap-2">
+                <span className="text-danger">✕</span>
+                <span>All daily food & calorie logs</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="text-danger">✕</span>
+                <span>All exercise entries</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="text-danger">✕</span>
+                <span>All weight history</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="text-danger">✕</span>
+                <span>All AI diary chat messages</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="text-danger">✕</span>
+                <span>All activity notifications</span>
+              </li>
+            </ul>
+            
+            <div className="mt-4 p-3 bg-success/10 rounded-lg">
+              <p className="text-sm text-success flex items-center gap-2">
+                <span>✓</span>
+                <span>Your profile (name, height, age, goals) will be kept</span>
+              </p>
+            </div>
+
+            <div className="mt-4 space-y-2">
+              <Label className="text-muted-foreground">
+                Type <span className="font-mono font-bold text-foreground">RESET</span> to confirm
+              </Label>
+              <Input
+                value={resetConfirmText}
+                onChange={(e) => setResetConfirmText(e.target.value.toUpperCase())}
+                placeholder="Type RESET"
+                className="bg-background font-mono"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => { setShowResetDialog(false); setResetConfirmText(""); }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleResetAccount}
+              disabled={resetConfirmText !== "RESET" || resetting}
+              className="bg-danger hover:bg-danger/90 text-white"
+            >
+              {resetting ? "Resetting..." : "Reset All Data"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
