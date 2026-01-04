@@ -2997,6 +2997,8 @@ function DashboardContent() {
         weightChange: null,
         balance: stats.todayBalance,
         protein: stats.todayProtein,
+        intake: stats.todayIntake,
+        outtake: stats.todayOuttake,
         isSuccess: stats.todayBalance <= stats.goalDeficit,
         isLocked: false,
         isFuture: false,
