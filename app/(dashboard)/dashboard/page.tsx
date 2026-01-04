@@ -655,32 +655,50 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
       return; // Too early, don't show reminder
     }
 
-    // STEP 6: Query database DIRECTLY for today's weight
-    const { data: todayLog, error } = await supabase
+    // STEP 6: Query database for today's weight
+    const { data: todayLog } = await supabase
       .from("daily_logs")
       .select("weight_kg")
       .eq("user_id", user.id)
       .eq("log_date", todayDateStr)
       .maybeSingle();
 
-    // STEP 7: Check if weight exists - use != null to catch both null and undefined
-    const hasWeight = todayLog?.weight_kg != null;
+    // STEP 7: Also get user's profile to check signup date and starting weight
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("created_at, starting_weight_kg")
+      .eq("id", user.id)
+      .single();
+
+    // Check if today is the signup day
+    const signupDate = profile?.created_at ? getLocalDateString(new Date(profile.created_at)) : null;
+    const isSignupDay = signupDate === todayDateStr;
+    const hasStartingWeight = profile?.starting_weight_kg != null;
+
+    // Weight exists if:
+    // 1. There's a weight_kg in today's daily_log, OR
+    // 2. Today is the signup day AND profile has starting_weight_kg
+    const hasWeightInLog = todayLog?.weight_kg != null;
+    const hasWeight = hasWeightInLog || (isSignupDay && hasStartingWeight);
     
-    // Debug logging (can be removed later)
+    // Debug logging
     console.log("[Weight Reminder Check]", {
       todayDateStr,
-      todayLog,
+      signupDate,
+      isSignupDay,
+      hasWeightInLog,
+      hasStartingWeight,
       hasWeight,
-      error: error?.message,
     });
 
     if (hasWeight) {
-      console.log("[Weight Reminder] Weight already logged:", todayLog.weight_kg, "kg - NOT showing reminder");
+      const weightSource = hasWeightInLog ? `logged: ${todayLog.weight_kg}kg` : `starting weight: ${profile?.starting_weight_kg}kg`;
+      console.log("[Weight Reminder] Weight exists (" + weightSource + ") - NOT showing reminder");
       return; // Weight exists, don't show reminder
     }
 
-    // STEP 8: No weight logged - show reminder after delay
-    console.log("[Weight Reminder] No weight logged for today - showing reminder");
+    // STEP 8: No weight for today - show reminder after delay
+    console.log("[Weight Reminder] No weight for today - showing reminder");
     
     const greeting = currentHour < 12 ? "Good morning" : currentHour < 17 ? "Good afternoon" : "Good evening";
     
