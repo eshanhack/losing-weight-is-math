@@ -11,8 +11,9 @@ function getOpenAI() {
   return new OpenAI({ apiKey });
 }
 
-// CalorieNinjas API for accurate nutrition data
-interface CalorieNinjasItem {
+// API Ninjas Nutrition API for accurate nutrition data
+// https://api-ninjas.com/api/nutrition
+interface NutritionItem {
   name: string;
   calories: number;
   serving_size_g: number;
@@ -27,16 +28,16 @@ interface CalorieNinjasItem {
   sugar_g: number;
 }
 
-async function getCalorieNinjasData(query: string): Promise<CalorieNinjasItem[]> {
-  const apiKey = process.env.CALORIE_NINJAS_API_KEY;
+async function getNutritionData(query: string): Promise<NutritionItem[]> {
+  const apiKey = process.env.API_NINJAS_KEY;
   if (!apiKey) {
-    console.log("CalorieNinjas API key not configured");
+    console.log("API Ninjas key not configured");
     return [];
   }
 
   try {
     const response = await fetch(
-      `https://api.calorieninjas.com/v1/nutrition?query=${encodeURIComponent(query)}`,
+      `https://api.api-ninjas.com/v1/nutrition?query=${encodeURIComponent(query)}`,
       {
         headers: {
           "X-Api-Key": apiKey,
@@ -45,14 +46,14 @@ async function getCalorieNinjasData(query: string): Promise<CalorieNinjasItem[]>
     );
 
     if (!response.ok) {
-      console.error("CalorieNinjas API error:", response.status);
+      console.error("API Ninjas error:", response.status);
       return [];
     }
 
     const data = await response.json();
-    return data.items || [];
+    return data || [];
   } catch (error) {
-    console.error("CalorieNinjas fetch error:", error);
+    console.error("API Ninjas fetch error:", error);
     return [];
   }
 }
@@ -157,12 +158,12 @@ export async function POST(request: Request) {
       }
     }
 
-    // For food entries, get accurate nutrition data from CalorieNinjas
+    // For food entries, get accurate nutrition data from API Ninjas
     let nutritionContext = "";
     if (!isEdit && !isDelete && !isExercise) {
-      const nutritionData = await getCalorieNinjasData(message);
+      const nutritionData = await getNutritionData(message);
       if (nutritionData.length > 0) {
-        nutritionContext = `\n\n## VERIFIED NUTRITION DATA (from CalorieNinjas database - USE THESE VALUES):
+        nutritionContext = `\n\n## VERIFIED NUTRITION DATA (from API Ninjas database - USE THESE VALUES):
 ${nutritionData.map(item => 
   `- ${item.name}: ${Math.round(item.calories)} cal, ${Math.round(item.protein_g)}g protein per ${item.serving_size_g}g serving`
 ).join("\n")}
@@ -174,8 +175,8 @@ IMPORTANT: Use the verified nutrition data above for accuracy. Only estimate if 
     // Check if OpenAI is configured
     const openai = getOpenAI();
     if (!openai) {
-      // If no OpenAI but we have CalorieNinjas data, use it directly
-      const nutritionData = await getCalorieNinjasData(message);
+      // If no OpenAI but we have API Ninjas data, use it directly
+      const nutritionData = await getNutritionData(message);
       if (nutritionData.length > 0) {
         return NextResponse.json(buildResponseFromNutritionData(nutritionData, message));
       }
@@ -209,10 +210,10 @@ IMPORTANT: Use the verified nutrition data above for accuracy. Only estimate if 
   } catch (error) {
     console.error("AI Parse error:", error);
 
-    // Try CalorieNinjas as fallback
+    // Try API Ninjas as fallback
     try {
       const { message } = await request.json();
-      const nutritionData = await getCalorieNinjasData(message);
+      const nutritionData = await getNutritionData(message);
       if (nutritionData.length > 0) {
         return NextResponse.json(buildResponseFromNutritionData(nutritionData, message));
       }
@@ -233,8 +234,8 @@ IMPORTANT: Use the verified nutrition data above for accuracy. Only estimate if 
   }
 }
 
-// Build response directly from CalorieNinjas data (when OpenAI is unavailable)
-function buildResponseFromNutritionData(data: CalorieNinjasItem[], originalMessage: string): AIParseResponse {
+// Build response directly from API Ninjas data (when OpenAI is unavailable)
+function buildResponseFromNutritionData(data: NutritionItem[], originalMessage: string): AIParseResponse {
   const items = data.map(item => ({
     description: item.name.charAt(0).toUpperCase() + item.name.slice(1),
     calories: Math.round(item.calories),
