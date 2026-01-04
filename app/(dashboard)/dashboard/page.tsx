@@ -2217,18 +2217,37 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
     ]);
   };
 
+  // Clear chat - only clears UI messages, not database data
+  const clearChat = () => {
+    setMessages([]);
+    setPendingSaveMeal(null);
+    showToast("Chat cleared", "food");
+  };
+
   return (
     <div className="flex flex-col h-full bg-background">
       {/* Header */}
       <div className="p-4 border-b border-border">
-        <div className="flex items-center gap-3">
-          <div className="icon-container bg-primary/10">
-            <span className="text-lg">💬</span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="icon-container bg-primary/10">
+              <span className="text-lg">💬</span>
+            </div>
+            <div>
+              <h2 className="font-display font-semibold text-foreground">AI Diary</h2>
+              <p className="text-xs text-muted-foreground">Log food & exercise naturally</p>
+            </div>
           </div>
-          <div>
-            <h2 className="font-display font-semibold text-foreground">AI Diary</h2>
-            <p className="text-xs text-muted-foreground">Log food & exercise naturally</p>
-          </div>
+          {messages.length > 0 && (
+            <button
+              type="button"
+              onClick={clearChat}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded hover:bg-secondary"
+              title="Clear chat"
+            >
+              Clear
+            </button>
+          )}
         </div>
       </div>
 
