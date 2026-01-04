@@ -78,6 +78,7 @@ interface CalendarDay {
   dayOfMonth: number;
   weight: number | null;
   balance: number;
+  protein: number;
   isSuccess: boolean;
   isLocked: boolean;
   isFuture: boolean;
@@ -428,7 +429,7 @@ function DashboardStats({
                 key={idx}
                 onClick={() => day.date && !day.isLocked && !day.isFuture && onDayClick(day)}
                 disabled={!day.date || day.isLocked || day.isFuture}
-                className={`aspect-square rounded-lg text-sm flex flex-col items-center justify-center transition-all relative ${
+                className={`aspect-square rounded-lg text-xs flex flex-col items-center justify-center transition-all relative p-1 ${
                   !day.date
                     ? "invisible"
                     : day.isLocked
@@ -442,9 +443,16 @@ function DashboardStats({
                     : "bg-secondary/30 hover:bg-secondary/50 text-muted-foreground"
                 } ${day.isToday ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}
               >
-                <span className="font-medium">{day.date && day.dayOfMonth}</span>
-                {day.weight && (
-                  <span className="text-[9px] opacity-70 mt-0.5">{day.weight}</span>
+                <span className="font-semibold text-sm">{day.date && day.dayOfMonth}</span>
+                {day.hasData && (
+                  <div className="flex flex-col items-center mt-0.5">
+                    <span className={`text-[8px] font-medium ${day.isSuccess ? "text-success" : "text-danger"}`}>
+                      {day.balance >= 0 ? "+" : ""}{day.balance}
+                    </span>
+                    {day.protein > 0 && (
+                      <span className="text-[7px] text-muted-foreground">{day.protein}g</span>
+                    )}
+                  </div>
                 )}
               </button>
             ))}
@@ -454,15 +462,18 @@ function DashboardStats({
           <div className="flex flex-wrap items-center gap-4 mt-4 pt-4 border-t border-border text-xs text-muted-foreground">
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded bg-success/10 border border-success/20"></div>
-              <span>Deficit (good)</span>
+              <span>Goal met</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded bg-danger/10 border border-danger/20"></div>
-              <span>Surplus</span>
+              <span>Missed goal</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded ring-2 ring-primary"></div>
               <span>Today</span>
+            </div>
+            <div className="flex items-center gap-2 ml-auto">
+              <span className="text-muted-foreground/70">Shows: balance • protein(g)</span>
             </div>
           </div>
         </Card>
@@ -1002,7 +1013,7 @@ function DashboardContent() {
     const calendarDays: CalendarDay[] = [];
 
     for (let i = 0; i < startDayOfWeek; i++) {
-      calendarDays.push({ date: "", dayOfMonth: 0, weight: null, balance: 0, isSuccess: false, isLocked: false, isFuture: true, isToday: false, hasData: false });
+      calendarDays.push({ date: "", dayOfMonth: 0, weight: null, balance: 0, protein: 0, isSuccess: false, isLocked: false, isFuture: true, isToday: false, hasData: false });
     }
 
     for (let day = 1; day <= daysInMonth; day++) {
@@ -1016,6 +1027,7 @@ function DashboardContent() {
         isLocked = true;
       }
       const balance = log ? calculateDailyBalance(tdee, log.caloric_intake, log.caloric_outtake) : 0;
+      const protein = log?.protein_grams || 0;
       // Success = met or exceeded goal deficit (balance <= goalDeficit, since negative = deficit)
       // e.g., -1100 <= -1000 means you exceeded your 1000 cal deficit goal
       const isSuccess = log ? balance <= goalDeficit : false;
@@ -1025,6 +1037,7 @@ function DashboardContent() {
         dayOfMonth: day,
         weight: log?.weight_kg || null,
         balance,
+        protein,
         isSuccess,
         isLocked,
         isFuture,
