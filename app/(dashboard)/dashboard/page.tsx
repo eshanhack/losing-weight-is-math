@@ -91,6 +91,8 @@ interface CalendarDay {
   weightChange: number | null; // Difference from previous day
   balance: number;
   protein: number;
+  intake: number;
+  outtake: number;
   isSuccess: boolean;
   isLocked: boolean;
   isFuture: boolean;
@@ -448,6 +450,10 @@ function DashboardStats({
                     <span className={`text-[11px] font-semibold ${day.isSuccess ? "text-success" : "text-danger"}`}>
                       {day.balance >= 0 ? "+" : ""}{day.balance} cal
                     </span>
+                    <div className="flex gap-1.5 text-[9px] text-muted-foreground">
+                      <span>🍽️{day.intake}</span>
+                      <span>🔥{day.outtake}</span>
+                    </div>
                     {day.protein > 0 && (
                       <span className="text-[10px] text-muted-foreground">{day.protein}g pro</span>
                     )}
@@ -492,7 +498,7 @@ function DashboardStats({
               <span>Today</span>
             </div>
             <div className="flex items-center gap-2 ml-auto">
-              <span className="text-muted-foreground/70">Shows: balance • protein(g)</span>
+              <span className="text-muted-foreground/70">🍽️ eaten • 🔥 burned</span>
             </div>
           </div>
         </Card>
@@ -2877,6 +2883,8 @@ function DashboardContent() {
       }
       const balance = log ? calculateDailyBalance(tdee, log.caloric_intake, log.caloric_outtake) : 0;
       const protein = log?.protein_grams || 0;
+      const intake = log?.caloric_intake || 0;
+      const outtake = log?.caloric_outtake || 0;
       // Success = met or exceeded goal deficit (balance <= goalDeficit, since negative = deficit)
       // e.g., -1100 <= -1000 means you exceeded your 1000 cal deficit goal
       const isSuccess = log ? balance <= goalDeficit : false;
@@ -2902,6 +2910,8 @@ function DashboardContent() {
         weightChange,
         balance,
         protein,
+        intake,
+        outtake,
         isSuccess,
         isLocked,
         isFuture,

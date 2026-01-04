@@ -47,3 +47,4 @@ CREATE POLICY "Users can delete own saved meals"
   ON saved_meals FOR DELETE
   USING (auth.uid() = user_id);
 
+
