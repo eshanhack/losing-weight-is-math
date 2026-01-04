@@ -753,11 +753,16 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
     setInput("");
     setLoading(true);
 
+    // Get user ID for personalized food memory
+    const supabaseForUser = createClient();
+    const { data: { user: currentUser } } = await supabaseForUser.auth.getUser();
+    const userId = currentUser?.id;
+
     try {
       const response = await fetch("/api/ai/parse", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: input }),
+        body: JSON.stringify({ message: input, user_id: userId }),
       });
 
       const data: AIParseResponse = await response.json();
@@ -847,6 +852,30 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
               { user_id: user.id, role: "user", content: input, log_date: today },
               { user_id: user.id, role: "assistant", content: confirmMessage.content, log_date: today },
             ]);
+            
+            // Save corrections to user's food memory for future reference
+            for (const edit of editsToApply) {
+              const perUnitCalories = edit.updates?.calories;
+              const perUnitProtein = edit.updates?.protein;
+              
+              if (perUnitCalories !== undefined || perUnitProtein !== undefined) {
+                const foodName = edit.search_term.toLowerCase().trim();
+                
+                // Upsert to user_food_memory (update if exists, insert if new)
+                await supabase
+                  .from("user_food_memory")
+                  .upsert({
+                    user_id: user.id,
+                    food_name: foodName,
+                    display_name: edit.search_term,
+                    calories: perUnitCalories ?? 0,
+                    protein_grams: perUnitProtein ?? 0,
+                    updated_at: new Date().toISOString(),
+                  }, {
+                    onConflict: "user_id,food_name",
+                  });
+              }
+            }
           }
           
           setLoading(false);
@@ -1012,6 +1041,23 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
                 { calories: edit.updates?.calories, protein: edit.updates?.protein },
                 matchingEntries.length
               ));
+              
+              // Save to user's food memory for future use
+              if (edit.updates?.calories !== undefined || edit.updates?.protein !== undefined) {
+                const foodName = edit.search_term.toLowerCase().trim();
+                await supabase
+                  .from("user_food_memory")
+                  .upsert({
+                    user_id: user.id,
+                    food_name: foodName,
+                    display_name: edit.search_term,
+                    calories: edit.updates?.calories ?? 0,
+                    protein_grams: edit.updates?.protein ?? 0,
+                    updated_at: new Date().toISOString(),
+                  }, {
+                    onConflict: "user_id,food_name",
+                  });
+              }
             }
           }
         }
@@ -1020,7 +1066,7 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
         await recalculateDailyTotals(supabase, log.id);
         
         if (totalUpdated > 0) {
-          confirmationContent = `✅ Updated ${updatedItems.join(" and ")}!`;
+          confirmationContent = `✅ Updated ${updatedItems.join(" and ")}! (Remembered for next time 🧠)`;
           showToast(`Updated ${updatedItems.join(", ")}`, "edit");
         } else {
           confirmationContent = `❌ Couldn't find any matching entries in today's log.`;
@@ -1063,6 +1109,23 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
             // Recalculate totals
             await recalculateDailyTotals(supabase, log.id);
             
+            // Save to user's food memory for future use
+            if (parsedData.updates?.calories !== undefined || parsedData.updates?.protein !== undefined) {
+              const foodName = parsedData.search_term.toLowerCase().trim();
+              await supabase
+                .from("user_food_memory")
+                .upsert({
+                  user_id: user.id,
+                  food_name: foodName,
+                  display_name: parsedData.search_term,
+                  calories: parsedData.updates?.calories ?? 0,
+                  protein_grams: parsedData.updates?.protein ?? 0,
+                  updated_at: new Date().toISOString(),
+                }, {
+                  onConflict: "user_id,food_name",
+                });
+            }
+            
             const updatedCount = matchingEntries.length;
             const updateParts = [];
             if (parsedData.updates?.calories !== undefined) {
@@ -1071,7 +1134,7 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
             if (parsedData.updates?.protein !== undefined) {
               updateParts.push(`${parsedData.updates.protein}g protein`);
             }
-            confirmationContent = `✅ Updated ${updatedCount} "${parsedData.search_term}" ${updatedCount === 1 ? "entry" : "entries"} to ${updateParts.join(" and ")}!`;
+            confirmationContent = `✅ Updated ${updatedCount} "${parsedData.search_term}" ${updatedCount === 1 ? "entry" : "entries"} to ${updateParts.join(" and ")}! (Remembered for next time 🧠)`;
             
             // Show toast and log notification
             showToast(`Updated ${updatedCount} ${parsedData.search_term} entries`, "edit");
