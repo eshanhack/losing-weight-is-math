@@ -2526,7 +2526,7 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
                 ? "Upgrade to continue..." 
                 : pendingSaveMeal 
                   ? "Enter a name (e.g., breakfast)..." 
-                  : "What did you eat? What exercise did you do?"
+                  : "What did you eat or do today?"
             }
             rows={1}
             className={`flex-1 min-h-10 max-h-32 px-4 py-2.5 text-sm bg-secondary border-0 rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none ${
