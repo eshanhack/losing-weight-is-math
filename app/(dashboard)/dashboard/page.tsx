@@ -656,6 +656,172 @@ function generateCoachingMessage(ctx: CoachingContext): string | null {
 }
 
 // ============================================================================
+// MEAL RECOMMENDATION GENERATOR
+// ============================================================================
+
+interface MealRecommendationContext {
+  caloriesLeft: number;
+  proteinGoal: number;
+  proteinConsumed: number;
+  mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+}
+
+function generateMealRecommendation(ctx: MealRecommendationContext): string {
+  const { caloriesLeft, proteinGoal, proteinConsumed, mealType } = ctx;
+  const proteinLeft = Math.max(0, proteinGoal - proteinConsumed);
+  
+  // Meal suggestions organized by calorie range
+  const mealIdeas: Record<string, { name: string; cal: number; protein: number; emoji: string }[]> = {
+    under200: [
+      { name: "Greek yogurt (150g)", cal: 90, protein: 15, emoji: "🥛" },
+      { name: "Cottage cheese (100g)", cal: 80, protein: 11, emoji: "🧀" },
+      { name: "2 hard boiled eggs", cal: 140, protein: 12, emoji: "🥚" },
+      { name: "Protein shake", cal: 120, protein: 25, emoji: "🥤" },
+      { name: "Apple with 1 tbsp almond butter", cal: 180, protein: 4, emoji: "🍎" },
+    ],
+    under400: [
+      { name: "Grilled chicken breast (150g)", cal: 230, protein: 45, emoji: "🍗" },
+      { name: "Tuna salad (no mayo)", cal: 200, protein: 40, emoji: "🐟" },
+      { name: "4 egg white omelet with veggies", cal: 180, protein: 24, emoji: "🍳" },
+      { name: "Turkey wrap (whole wheat)", cal: 350, protein: 25, emoji: "🌯" },
+      { name: "Salmon fillet (120g)", cal: 280, protein: 28, emoji: "🐟" },
+    ],
+    under600: [
+      { name: "Chicken stir-fry with veggies", cal: 450, protein: 40, emoji: "🍲" },
+      { name: "Grilled salmon with broccoli", cal: 400, protein: 35, emoji: "🐟" },
+      { name: "Turkey burger (no bun) with salad", cal: 380, protein: 35, emoji: "🍔" },
+      { name: "Shrimp with quinoa", cal: 420, protein: 35, emoji: "🍤" },
+      { name: "Lean beef with roasted vegetables", cal: 480, protein: 40, emoji: "🥩" },
+    ],
+    under800: [
+      { name: "Chicken breast with rice & veggies", cal: 550, protein: 50, emoji: "🍚" },
+      { name: "Fish tacos (2) with slaw", cal: 500, protein: 30, emoji: "🌮" },
+      { name: "Pasta with lean meat sauce (small)", cal: 600, protein: 30, emoji: "🍝" },
+      { name: "Poke bowl", cal: 550, protein: 35, emoji: "🍣" },
+      { name: "Grilled chicken Caesar salad", cal: 500, protein: 40, emoji: "🥗" },
+    ],
+    over800: [
+      { name: "Chicken burrito bowl", cal: 700, protein: 45, emoji: "🥙" },
+      { name: "Steak with sweet potato & salad", cal: 750, protein: 50, emoji: "🥩" },
+      { name: "Salmon with pasta", cal: 700, protein: 40, emoji: "🐟" },
+      { name: "Thai basil chicken with rice", cal: 680, protein: 35, emoji: "🍛" },
+    ],
+  };
+
+  // Select appropriate calorie tier
+  let tierKey = 'over800';
+  if (caloriesLeft < 200) tierKey = 'under200';
+  else if (caloriesLeft < 400) tierKey = 'under400';
+  else if (caloriesLeft < 600) tierKey = 'under600';
+  else if (caloriesLeft < 800) tierKey = 'under800';
+
+  const options = mealIdeas[tierKey];
+  
+  // Sort by protein if they need protein, otherwise by calories fitting their budget
+  const sorted = [...options].sort((a, b) => {
+    if (proteinLeft > 20) {
+      return b.protein - a.protein; // Prioritize high protein
+    }
+    return Math.abs(a.cal - caloriesLeft * 0.8) - Math.abs(b.cal - caloriesLeft * 0.8);
+  });
+
+  const top3 = sorted.slice(0, 3);
+  
+  let message = `🍽️ You have **${caloriesLeft} cal** left for ${mealType}`;
+  if (proteinLeft > 10) {
+    message += ` (and ${proteinLeft}g protein to go)`;
+  }
+  message += `!\n\nHere are some ideas:\n`;
+  
+  top3.forEach((meal, idx) => {
+    message += `\n${idx + 1}. ${meal.emoji} **${meal.name}**\n   ${meal.cal} cal • ${meal.protein}g protein`;
+  });
+  
+  message += `\n\n💡 Tip: High protein meals keep you fuller longer!`;
+  
+  return message;
+}
+
+// ============================================================================
+// CHEAT MEAL IMPACT CALCULATOR
+// ============================================================================
+
+interface CheatMealContext {
+  cheatCalories: number;
+  cheatProtein: number;
+  cheatDescription: string;
+  currentBalance: number;
+  goalDeficit: number;
+  tdee: number;
+}
+
+function generateCheatMealImpact(ctx: CheatMealContext): string {
+  const { cheatCalories, cheatProtein, cheatDescription, currentBalance, goalDeficit, tdee } = ctx;
+  
+  // Calculate impact
+  const newBalance = currentBalance + cheatCalories;
+  const overMaintenance = newBalance > 0 ? newBalance : 0;
+  const overGoal = newBalance - goalDeficit; // How far from goal deficit
+  
+  // Activity estimates
+  const activities = {
+    walk: { emoji: "🚶", calPerMin: 4 },
+    briskWalk: { emoji: "🚶‍♂️", calPerMin: 5.5 },
+    jog: { emoji: "🏃", calPerMin: 9 },
+    run: { emoji: "🏃‍♂️", calPerMin: 12 },
+    hiit: { emoji: "💪", calPerMin: 14 },
+  };
+
+  const suggestActivity = (cals: number): string => {
+    const suggestions: string[] = [];
+    const walkMins = Math.ceil(cals / activities.walk.calPerMin);
+    const jogMins = Math.ceil(cals / activities.jog.calPerMin);
+    const runMins = Math.ceil(cals / activities.run.calPerMin);
+    const hiitMins = Math.ceil(cals / activities.hiit.calPerMin);
+    
+    if (walkMins <= 90) suggestions.push(`${activities.walk.emoji} ${walkMins} min walk`);
+    if (jogMins <= 45 && jogMins >= 15) suggestions.push(`${activities.jog.emoji} ${jogMins} min jog`);
+    if (runMins <= 35 && runMins >= 15) suggestions.push(`${activities.run.emoji} ${runMins} min run`);
+    if (hiitMins <= 30 && hiitMins >= 10) suggestions.push(`${activities.hiit.emoji} ${hiitMins} min HIIT`);
+    
+    return suggestions.slice(0, 3).join(" • ");
+  };
+
+  let message = `🍔 **Cheat Meal Calculator: ${cheatDescription}**\n`;
+  message += `━━━━━━━━━━━━━━━━━━━━━━\n`;
+  message += `📊 This meal: **${cheatCalories} cal**`;
+  if (cheatProtein > 0) message += ` • ${cheatProtein}g protein`;
+  message += `\n\n`;
+
+  // Current status
+  message += `📍 **Your current balance:** ${currentBalance >= 0 ? '+' : ''}${currentBalance} cal\n`;
+  message += `📍 **After this meal:** ${newBalance >= 0 ? '+' : ''}${newBalance} cal\n\n`;
+
+  if (newBalance > 0) {
+    // They'll be in surplus
+    message += `⚠️ **Result:** You'll be **${newBalance} cal over maintenance**\n\n`;
+    message += `**To get back to maintenance (break-even):**\n${suggestActivity(newBalance)}\n\n`;
+    
+    if (overGoal > 0) {
+      message += `**To still hit your ${Math.abs(goalDeficit)} cal deficit goal:**\n${suggestActivity(overGoal)}\n\n`;
+    }
+  } else if (newBalance > goalDeficit) {
+    // They'll still be in deficit but miss their goal
+    message += `✅ **Result:** Still in deficit (${Math.abs(newBalance)} cal)\n`;
+    message += `⚠️ But you'll miss your ${Math.abs(goalDeficit)} goal by ${overGoal} cal\n\n`;
+    message += `**To still hit your goal:**\n${suggestActivity(overGoal)}\n\n`;
+  } else {
+    // They can have it and still hit goal!
+    message += `✅ **Great news!** You can have this and still hit your ${Math.abs(goalDeficit)} cal deficit goal! 🎉\n\n`;
+  }
+
+  message += `━━━━━━━━━━━━━━━━━━━━━━\n`;
+  message += `Want to log it? Just say "yes" or "log it"!`;
+
+  return message;
+}
+
+// ============================================================================
 // AI DIARY COMPONENT
 // ============================================================================
 
@@ -1006,24 +1172,104 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
         }
       }
 
+      // Handle special types that need context
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      let finalMessage = data.message;
+      let finalParsedData = data;
+
+      // MEAL RECOMMENDATION: Fetch user's current state and generate meal ideas
+      if (data.type === "meal_recommendation" && user) {
+        const { data: todayLog } = await supabase
+          .from("daily_logs")
+          .select("caloric_intake, protein_grams")
+          .eq("user_id", user.id)
+          .eq("log_date", today)
+          .single();
+
+        const { data: userProfile } = await supabase
+          .from("profiles")
+          .select("tdee, daily_calorie_goal, protein_goal")
+          .eq("id", user.id)
+          .single();
+
+        if (userProfile) {
+          const tdee = userProfile.tdee || 2000;
+          const goalDeficit = userProfile.daily_calorie_goal || 500;
+          const targetCalories = tdee - goalDeficit;
+          const caloriesConsumed = todayLog?.caloric_intake || 0;
+          const caloriesLeft = Math.max(0, targetCalories - caloriesConsumed);
+          const proteinGoal = userProfile.protein_goal || 120;
+          const proteinConsumed = todayLog?.protein_grams || 0;
+
+          // Determine meal type based on time
+          const hour = new Date().getHours();
+          const mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack' = 
+            hour < 10 ? 'breakfast' : hour < 14 ? 'lunch' : hour < 18 ? 'snack' : 'dinner';
+
+          finalMessage = generateMealRecommendation({
+            caloriesLeft,
+            proteinGoal,
+            proteinConsumed,
+            mealType,
+          });
+        }
+        // Mark as confirmed since it's just information
+        finalParsedData = { ...data, type: "chat" as const };
+      }
+
+      // CHEAT CALCULATION: Fetch user's current state and calculate impact
+      if (data.type === "cheat_calculation" && user && data.items.length > 0) {
+        const { data: todayLog } = await supabase
+          .from("daily_logs")
+          .select("caloric_intake, caloric_outtake")
+          .eq("user_id", user.id)
+          .eq("log_date", today)
+          .single();
+
+        const { data: userProfile } = await supabase
+          .from("profiles")
+          .select("tdee, daily_calorie_goal")
+          .eq("id", user.id)
+          .single();
+
+        if (userProfile) {
+          const tdee = userProfile.tdee || 2000;
+          const goalDeficit = -(userProfile.daily_calorie_goal || 500);
+          const intake = todayLog?.caloric_intake || 0;
+          const outtake = todayLog?.caloric_outtake || 0;
+          const currentBalance = intake - (tdee + outtake);
+
+          const cheatItem = data.items[0];
+          finalMessage = generateCheatMealImpact({
+            cheatCalories: data.total_calories,
+            cheatProtein: data.total_protein,
+            cheatDescription: cheatItem.description,
+            currentBalance,
+            goalDeficit,
+            tdee,
+          });
+        }
+        // Keep the parsed data so user can choose to log it
+      }
+
       const assistantMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: data.message,
-        parsedData: data,
-        confirmed: false,
+        content: finalMessage,
+        parsedData: finalParsedData,
+        confirmed: data.type === "meal_recommendation", // Auto-confirm info messages
         timestamp: new Date().toISOString(),
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
 
       // Save to database
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         await supabase.from("chat_messages").insert([
           { user_id: user.id, role: "user", content: input, log_date: today },
-          { user_id: user.id, role: "assistant", content: data.message, log_date: today },
+          { user_id: user.id, role: "assistant", content: finalMessage, log_date: today },
         ]);
       }
     } catch (error) {
@@ -1326,10 +1572,12 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
         }
 
       } else {
-        // NEW ENTRY OPERATION (food or exercise)
+        // NEW ENTRY OPERATION (food, exercise, or cheat meal)
+        // Cheat calculations are logged as food
+        const entryType = parsedData.type === "cheat_calculation" ? "food" : parsedData.type as "food" | "exercise";
         const entries = parsedData.items.map((item) => ({
           daily_log_id: log.id,
-          entry_type: parsedData.type as "food" | "exercise",
+          entry_type: entryType,
           description: item.description,
           calories: item.calories,
           protein_grams: "protein" in item ? item.protein : 0,
@@ -1355,9 +1603,10 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
           protein: "protein" in item ? item.protein : 0,
         }));
         
-        if (parsedData.type === "food") {
+        if (parsedData.type === "food" || parsedData.type === "cheat_calculation") {
           const itemNames = parsedData.items.map(i => i.description).join(", ");
-          showToast(`Logged: ${itemNames}`, "food");
+          const toastMsg = parsedData.type === "cheat_calculation" ? `Cheat meal logged: ${itemNames}` : `Logged: ${itemNames}`;
+          showToast(toastMsg, "food");
           logNotification(createFoodNotification(itemsForNotification));
         } else {
           const itemNames = parsedData.items.map(i => i.description).join(", ");
@@ -1597,9 +1846,12 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
                         </div>
                       )}
 
-                      {/* For NEW ENTRIES (food/exercise) */}
-                      {(message.parsedData.type === "food" || message.parsedData.type === "exercise") && message.parsedData.items.length > 0 && (
+                      {/* For NEW ENTRIES (food/exercise/cheat) */}
+                      {(message.parsedData.type === "food" || message.parsedData.type === "exercise" || message.parsedData.type === "cheat_calculation") && message.parsedData.items.length > 0 && (
                         <div className="space-y-1.5">
+                          {message.parsedData.type === "cheat_calculation" && (
+                            <div className="text-xs text-gold mb-2">🍔 Cheat meal - log it if you decide to have it:</div>
+                          )}
                           {message.parsedData.items.map((item, idx) => (
                             <div key={idx} className="flex justify-between gap-3 text-xs">
                               <span className="truncate opacity-90">{item.description}</span>
@@ -1632,6 +1884,8 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
                               ? "bg-gold hover:bg-gold/90 text-black"
                               : message.parsedData.type === "weight"
                               ? "bg-blue-500 hover:bg-blue-500/90 text-white"
+                              : message.parsedData.type === "cheat_calculation"
+                              ? "bg-orange-500 hover:bg-orange-500/90 text-white"
                               : "bg-success hover:bg-success/90 text-white"
                           }`}
                         >
@@ -1643,6 +1897,8 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
                             ? "✓ Delete" 
                             : message.parsedData.type === "weight"
                             ? "✓ Log Weight"
+                            : message.parsedData.type === "cheat_calculation"
+                            ? "🍔 Log Cheat Meal"
                             : "✓ Log this"}
                         </Button>
                         <Button 

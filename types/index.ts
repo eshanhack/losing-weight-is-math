@@ -186,7 +186,7 @@ export interface ParsedExercise {
 }
 
 export interface AIParseResponse {
-  type: 'food' | 'exercise' | 'edit' | 'delete' | 'weight' | 'multi_edit' | 'chat';
+  type: 'food' | 'exercise' | 'edit' | 'delete' | 'weight' | 'multi_edit' | 'chat' | 'meal_recommendation' | 'cheat_calculation';
   items: ParsedFoodItem[] | ParsedExercise[];
   total_calories: number;
   total_protein: number;
