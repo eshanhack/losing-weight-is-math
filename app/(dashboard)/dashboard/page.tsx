@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense, useRef, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -433,7 +434,7 @@ function DashboardStats({
           </div>
 
           {/* Calendar grid */}
-          <div className="grid grid-cols-7 gap-1 lg:gap-2">
+          <div className="grid grid-cols-7 gap-1 lg:gap-2 relative">
             {calendar.map((day, idx) => (
               <button
                 key={idx}
@@ -443,7 +444,7 @@ function DashboardStats({
                   !day.date
                     ? "invisible"
                     : day.isLocked
-                    ? "bg-secondary/30 opacity-40 cursor-not-allowed"
+                    ? "bg-secondary/50 cursor-not-allowed border border-border/50"
                     : day.isFuture
                     ? "bg-secondary/20 text-muted-foreground cursor-default"
                     : day.hasData && day.isSuccess
@@ -453,9 +454,17 @@ function DashboardStats({
                     : "bg-secondary/30 hover:bg-secondary/50"
                 } ${day.isToday ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}
               >
-                <span className="font-bold text-base text-foreground">{day.date && day.dayOfMonth}</span>
+                {/* Lock icon for locked days */}
+                {day.isLocked && day.date && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-background/60 rounded-lg backdrop-blur-[1px]">
+                    <span className="text-lg opacity-60">🔒</span>
+                  </div>
+                )}
+                <span className={`font-bold text-base ${day.isLocked ? "text-muted-foreground/50" : "text-foreground"}`}>
+                  {day.date && day.dayOfMonth}
+                </span>
                 {/* Show weight if logged with change from yesterday */}
-                {day.weight && (
+                {day.weight && !day.isLocked && (
                   <div className="flex items-center gap-1">
                     <span className="text-[10px] text-blue-400 font-medium">{day.weight}kg</span>
                     {day.weightChange !== null && day.weightChange !== 0 && (
@@ -465,7 +474,7 @@ function DashboardStats({
                     )}
                   </div>
                 )}
-                {day.hasData && (
+                {day.hasData && !day.isLocked && (
                   <div className="flex flex-col items-center mt-0.5 gap-0.5">
                     <span className={`text-[11px] font-semibold ${day.isSuccess ? "text-success" : "text-danger"}`}>
                       {day.balance >= 0 ? "+" : ""}{day.balance} cal
@@ -477,6 +486,26 @@ function DashboardStats({
                 )}
               </button>
             ))}
+            
+            {/* Upgrade banner overlay if any days are locked */}
+            {calendar.some(d => d.isLocked) && (
+              <div className="col-span-7 mt-2">
+                <Link href="/dashboard/subscribe">
+                  <div className="bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border border-primary/30 rounded-lg p-3 flex items-center justify-between hover:bg-primary/20 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">🔓</span>
+                      <div>
+                        <p className="font-semibold text-sm text-foreground">Upgrade to unlock full calendar</p>
+                        <p className="text-xs text-muted-foreground">Continue tracking your progress beyond the trial</p>
+                      </div>
+                    </div>
+                    <span className="px-3 py-1.5 bg-primary text-white text-sm font-semibold rounded-lg">
+                      Upgrade →
+                    </span>
+                  </div>
+                </Link>
+              </div>
+            )}
           </div>
 
           {/* Legend */}
@@ -513,8 +542,10 @@ function AIDiary({ onEntryConfirmed, todayHasWeight }: { onEntryConfirmed: () =>
   const [loading, setLoading] = useState(false);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [weightReminderShown, setWeightReminderShown] = useState(false);
+  const [upgradeReminderShown, setUpgradeReminderShown] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { showToast } = useToast();
+  const { trialInfo } = useDashboard();
   
   // Use LOCAL date, not UTC!
   const today = getLocalDateString();
@@ -527,6 +558,48 @@ function AIDiary({ onEntryConfirmed, todayHasWeight }: { onEntryConfirmed: () =>
   useEffect(() => {
     checkWeightReminder();
   }, [todayHasWeight]);
+  
+  // Check for trial upgrade reminder (2 days or less before expiry)
+  useEffect(() => {
+    if (!upgradeReminderShown && trialInfo.isTrialing && !trialInfo.isPaid && trialInfo.daysLeft <= 2) {
+      setUpgradeReminderShown(true);
+      
+      const urgency = trialInfo.daysLeft === 0 
+        ? "⚠️ Your free trial ends TODAY!" 
+        : trialInfo.daysLeft === 1 
+          ? "⏰ Only 1 day left in your trial!" 
+          : `📅 ${trialInfo.daysLeft} days left in your trial!`;
+      
+      setTimeout(() => {
+        setMessages(prev => [
+          ...prev,
+          {
+            id: "upgrade-reminder-" + Date.now(),
+            role: "assistant",
+            content: `${urgency}\n\nUpgrade now to:\n• 🔓 Unlock the full calendar\n• 📊 Keep all your tracking data\n• 🎯 Continue your weight loss journey\n\nTap the Upgrade button in the header to subscribe!`,
+            timestamp: new Date().toISOString(),
+          }
+        ]);
+      }, 2500);
+    }
+    
+    // Show expired message if trial has ended
+    if (!upgradeReminderShown && trialInfo.isExpired && !trialInfo.isPaid) {
+      setUpgradeReminderShown(true);
+      
+      setTimeout(() => {
+        setMessages(prev => [
+          ...prev,
+          {
+            id: "trial-expired-" + Date.now(),
+            role: "assistant",
+            content: `🔒 Your free trial has ended.\n\nTo continue tracking your calories and weight loss progress, please upgrade to a paid subscription.\n\nYour data is safe - upgrade now to pick up where you left off!`,
+            timestamp: new Date().toISOString(),
+          }
+        ]);
+      }, 1000);
+    }
+  }, [trialInfo.isTrialing, trialInfo.isExpired, trialInfo.isPaid, trialInfo.daysLeft, upgradeReminderShown]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -608,6 +681,27 @@ function AIDiary({ onEntryConfirmed, todayHasWeight }: { onEntryConfirmed: () =>
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || loading) return;
+    
+    // Block logging if trial is expired
+    if (trialInfo.isExpired && !trialInfo.isPaid) {
+      setMessages(prev => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          role: "user",
+          content: input,
+          timestamp: new Date().toISOString(),
+        },
+        {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: "🔒 Your free trial has ended. Please upgrade to continue logging your food and exercise!",
+          timestamp: new Date().toISOString(),
+        }
+      ]);
+      setInput("");
+      return;
+    }
 
     const now = new Date().toISOString();
     const userMessage: ChatMessage = {
@@ -1116,6 +1210,14 @@ function AIDiary({ onEntryConfirmed, todayHasWeight }: { onEntryConfirmed: () =>
 
       {/* Input */}
       <div className="p-4 border-t border-border">
+        {/* Trial expired banner */}
+        {trialInfo.isExpired && !trialInfo.isPaid && (
+          <Link href="/dashboard/subscribe" className="block mb-3">
+            <div className="bg-danger/10 border border-danger/30 rounded-lg p-3 text-center hover:bg-danger/20 transition-colors">
+              <p className="text-sm font-medium text-danger">🔒 Trial expired - Upgrade to continue logging</p>
+            </div>
+          </Link>
+        )}
         <form onSubmit={handleSubmit} className="flex gap-2 items-end">
           <textarea
             value={input}
@@ -1128,9 +1230,11 @@ function AIDiary({ onEntryConfirmed, todayHasWeight }: { onEntryConfirmed: () =>
                 }
               }
             }}
-            placeholder="What did you eat or do?"
+            placeholder={trialInfo.isExpired && !trialInfo.isPaid ? "Upgrade to continue..." : "What did you eat or do?"}
             rows={1}
-            className="flex-1 min-h-10 max-h-32 px-4 py-2.5 text-sm bg-secondary border-0 rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
+            className={`flex-1 min-h-10 max-h-32 px-4 py-2.5 text-sm bg-secondary border-0 rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none ${
+              trialInfo.isExpired && !trialInfo.isPaid ? "opacity-60" : ""
+            }`}
             disabled={loading}
             style={{ height: 'auto' }}
             onInput={(e) => {
@@ -1409,8 +1513,15 @@ function DashboardContent() {
     const lastDay = new Date(currentYear, currentMonth + 1, 0);
     const daysInMonth = lastDay.getDate();
     const startDayOfWeek = firstDay.getDay();
-    const trialEnd = sub?.trial_ends_at ? new Date(sub.trial_ends_at) : null;
     const isPaid = sub?.status === "active";
+    
+    // Calculate trial end as 7 days from signup date
+    const signupDateObj = profile?.created_at ? new Date(profile.created_at) : null;
+    let trialEnd: Date | null = null;
+    if (signupDateObj) {
+      trialEnd = new Date(signupDateObj);
+      trialEnd.setDate(trialEnd.getDate() + 7);
+    }
     
     // Get user's signup date to show starting weight
     const signupDate = profile?.created_at ? getLocalDateString(new Date(profile.created_at)) : null;
@@ -1443,9 +1554,18 @@ function DashboardContent() {
       const log = logs.find((l) => l.log_date === dateStr);
       const isToday = dateStr === todayStr;
       const isFuture = date > today && !isToday;
+      
+      // Lock days after trial end (7 days from signup) if not paid
       let isLocked = false;
-      if (!isPaid && trialEnd && date > trialEnd && !isFuture) {
-        isLocked = true;
+      if (!isPaid && trialEnd) {
+        // Lock if date is after trial end date
+        const dateAtMidnight = new Date(date);
+        dateAtMidnight.setHours(0, 0, 0, 0);
+        const trialEndAtMidnight = new Date(trialEnd);
+        trialEndAtMidnight.setHours(0, 0, 0, 0);
+        if (dateAtMidnight > trialEndAtMidnight) {
+          isLocked = true;
+        }
       }
       const balance = log ? calculateDailyBalance(tdee, log.caloric_intake, log.caloric_outtake) : 0;
       const protein = log?.protein_grams || 0;

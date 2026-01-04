@@ -185,12 +185,30 @@ interface DashboardContextType {
   refreshData: () => void;
   profile: Profile | null;
   subscription: Subscription | null;
+  trialInfo: {
+    isTrialing: boolean;
+    isExpired: boolean;
+    isPaid: boolean;
+    trialEndDate: Date | null;
+    daysLeft: number;
+    hoursLeft: number;
+    minutesLeft: number;
+  };
 }
 
 const DashboardContext = createContext<DashboardContextType>({
   refreshData: () => {},
   profile: null,
   subscription: null,
+  trialInfo: {
+    isTrialing: false,
+    isExpired: false,
+    isPaid: false,
+    trialEndDate: null,
+    daysLeft: 0,
+    hoursLeft: 0,
+    minutesLeft: 0,
+  },
 });
 
 export const useDashboard = () => useContext(DashboardContext);
@@ -242,20 +260,89 @@ export default function DashboardLayout({
     window.location.href = "/";
   };
 
-  const isTrialing = subscription?.status === "trialing";
-  const trialDaysLeft = subscription?.trial_ends_at
-    ? Math.max(
-        0,
-        Math.ceil(
-          (new Date(subscription.trial_ends_at).getTime() - Date.now()) /
-            (1000 * 60 * 60 * 24)
-        )
-      )
-    : 0;
+  // Calculate trial info based on signup date (7 days from profile creation)
+  const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+  
+  const getTrialInfo = useCallback(() => {
+    const isPaid = subscription?.status === "active";
+    
+    if (isPaid) {
+      return {
+        isTrialing: false,
+        isExpired: false,
+        isPaid: true,
+        trialEndDate: null,
+        daysLeft: 0,
+        hoursLeft: 0,
+        minutesLeft: 0,
+      };
+    }
+
+    // Calculate trial end as 7 days from signup
+    const signupDate = profile?.created_at ? new Date(profile.created_at) : null;
+    if (!signupDate) {
+      return {
+        isTrialing: false,
+        isExpired: false,
+        isPaid: false,
+        trialEndDate: null,
+        daysLeft: 7,
+        hoursLeft: 0,
+        minutesLeft: 0,
+      };
+    }
+
+    const trialEndDate = new Date(signupDate);
+    trialEndDate.setDate(trialEndDate.getDate() + 7);
+    
+    const now = new Date();
+    const timeLeft = trialEndDate.getTime() - now.getTime();
+    const isExpired = timeLeft <= 0;
+    const isTrialing = !isExpired;
+
+    const daysLeft = Math.max(0, Math.floor(timeLeft / (1000 * 60 * 60 * 24)));
+    const hoursLeft = Math.max(0, Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)));
+    const minutesLeft = Math.max(0, Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60)));
+
+    return {
+      isTrialing,
+      isExpired,
+      isPaid: false,
+      trialEndDate,
+      daysLeft,
+      hoursLeft,
+      minutesLeft,
+    };
+  }, [profile?.created_at, subscription?.status]);
+
+  const trialInfo = getTrialInfo();
+
+  // Update countdown every minute
+  useEffect(() => {
+    if (trialInfo.isTrialing && !trialInfo.isPaid) {
+      const updateCountdown = () => {
+        const info = getTrialInfo();
+        setCountdown({
+          days: info.daysLeft,
+          hours: info.hoursLeft,
+          minutes: info.minutesLeft,
+          seconds: 0,
+        });
+      };
+      
+      updateCountdown();
+      const interval = setInterval(updateCountdown, 60000); // Update every minute
+      return () => clearInterval(interval);
+    }
+  }, [trialInfo.isTrialing, trialInfo.isPaid, getTrialInfo]);
+
+  // For backward compatibility
+  const isTrialing = trialInfo.isTrialing;
+  const trialDaysLeft = trialInfo.daysLeft;
 
   return (
     <ToastProvider>
-    <DashboardContext.Provider value={{ refreshData, profile, subscription }}>
+    <DashboardContext.Provider value={{ refreshData, profile, subscription, trialInfo }}>
       <div className="min-h-screen bg-background">
         {/* Desktop Header */}
         <header className="hidden lg:flex fixed top-0 left-0 right-0 z-50 h-16 border-b border-border bg-background/95 backdrop-blur-sm">
@@ -297,14 +384,28 @@ export default function DashboardLayout({
 
             {/* Right side */}
             <div className="flex items-center gap-4">
-              {/* Trial badge */}
-              {isTrialing && (
+              {/* Trial badge with countdown */}
+              {(isTrialing || trialInfo.isExpired) && !trialInfo.isPaid && (
                 <Link href="/dashboard/subscribe">
-                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20">
-                    <span className="text-sm text-primary font-medium">
-                      🎉 {trialDaysLeft} days left
-                    </span>
-                    <span className="px-2 py-0.5 text-xs font-semibold rounded bg-primary text-white">
+                  <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border ${
+                    trialInfo.isExpired 
+                      ? "bg-danger/10 border-danger/30" 
+                      : trialDaysLeft <= 2 
+                        ? "bg-warning/10 border-warning/30" 
+                        : "bg-primary/10 border-primary/20"
+                  }`}>
+                    {trialInfo.isExpired ? (
+                      <span className="text-sm text-danger font-medium">
+                        ⚠️ Trial Expired
+                      </span>
+                    ) : (
+                      <span className={`text-sm font-medium ${trialDaysLeft <= 2 ? "text-warning" : "text-primary"}`}>
+                        ⏱️ {trialDaysLeft}d {countdown.hours}h {countdown.minutes}m
+                      </span>
+                    )}
+                    <span className={`px-2 py-0.5 text-xs font-semibold rounded text-white ${
+                      trialInfo.isExpired ? "bg-danger" : trialDaysLeft <= 2 ? "bg-warning" : "bg-primary"
+                    }`}>
                       Upgrade
                     </span>
                   </div>
@@ -343,10 +444,16 @@ export default function DashboardLayout({
               </div>
               <span className="font-display font-bold">LWM</span>
             </div>
-            {isTrialing && (
+            {(isTrialing || trialInfo.isExpired) && !trialInfo.isPaid && (
               <Link href="/dashboard/subscribe">
-                <span className="text-xs font-medium text-primary bg-primary/10 px-2.5 py-1 rounded-full">
-                  {trialDaysLeft}d left
+                <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${
+                  trialInfo.isExpired 
+                    ? "text-danger bg-danger/10" 
+                    : trialDaysLeft <= 2 
+                      ? "text-warning bg-warning/10" 
+                      : "text-primary bg-primary/10"
+                }`}>
+                  {trialInfo.isExpired ? "Expired!" : `${trialDaysLeft}d ${countdown.hours}h`}
                 </span>
               </Link>
             )}
