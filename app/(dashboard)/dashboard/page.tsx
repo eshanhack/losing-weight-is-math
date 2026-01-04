@@ -536,7 +536,7 @@ function DashboardStats({
 // AI DIARY COMPONENT
 // ============================================================================
 
-function AIDiary({ onEntryConfirmed, todayHasWeight }: { onEntryConfirmed: () => void; todayHasWeight: boolean }) {
+function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConfirmed: () => void; todayHasWeight: boolean; dataLoaded: boolean }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -554,10 +554,12 @@ function AIDiary({ onEntryConfirmed, todayHasWeight }: { onEntryConfirmed: () =>
     loadChatHistory();
   }, []);
   
-  // Check weight reminder when todayHasWeight prop changes
+  // Check weight reminder ONLY after data has loaded
   useEffect(() => {
-    checkWeightReminder();
-  }, [todayHasWeight]);
+    if (dataLoaded) {
+      checkWeightReminder();
+    }
+  }, [todayHasWeight, dataLoaded]);
   
   // Check for trial upgrade reminder (2 days or less before expiry)
   useEffect(() => {
@@ -1275,6 +1277,7 @@ function ResizableSplitView({
   onRealWeightCardClick,
   onEntryConfirmed,
   todayHasWeight,
+  dataLoaded,
 }: {
   stats: {
     todayBalance: number;
@@ -1300,6 +1303,7 @@ function ResizableSplitView({
   onRealWeightCardClick: () => void;
   onEntryConfirmed: () => void;
   todayHasWeight: boolean;
+  dataLoaded: boolean;
 }) {
   const { width: diaryWidth, isResizing, startResizing } = useResizable(380, 280, 600);
 
@@ -1341,7 +1345,7 @@ function ResizableSplitView({
           userSelect: isResizing ? "none" : "auto"
         }}
       >
-        <AIDiary onEntryConfirmed={onEntryConfirmed} todayHasWeight={todayHasWeight} />
+        <AIDiary onEntryConfirmed={onEntryConfirmed} todayHasWeight={todayHasWeight} dataLoaded={dataLoaded} />
       </div>
     </div>
   );
@@ -1902,6 +1906,7 @@ function DashboardContent() {
         onRealWeightCardClick={handleRealWeightCardClick}
         onEntryConfirmed={handleEntryConfirmed}
         todayHasWeight={todayHasWeight}
+        dataLoaded={!loading}
       />
 
       {/* Mobile: Just dashboard (diary is separate tab) */}
