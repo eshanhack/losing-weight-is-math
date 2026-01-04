@@ -299,7 +299,7 @@ export async function POST(request: Request) {
     const isEdit = editPatterns.some(pattern => pattern.test(lowerMessage)) && 
                    !/^(?:i ate|i had|i eat|just had|for breakfast|for lunch|for dinner)\b/.test(lowerMessage.trim());
     const isDelete = /\b(delete|remove|undo)\b/.test(lowerMessage);
-    const isExercise = /\b(run|walk|jog|bike|swim|workout|exercise|gym|cycling|hiit|yoga|lift|weights)\b/.test(lowerMessage);
+    const isExercise = /\b(run|walk|jog|bike|swim|workout|exercise|gym|cycling|hiit|yoga|lift|weights|treadmill|cardio|elliptical|rowing|sprint|squat|pushup|plank|burpee)\b/.test(lowerMessage);
     
     // Check for weight entry (e.g., "I weigh 82kg", "my weight is 80.5", "82.3 kg today", "weight: 81")
     const weightMatch = lowerMessage.match(/(?:weigh|weight|scale|weighed|weighing)[:\s]+(\d+(?:\.\d+)?)\s*(?:kg|kilos?|pounds?|lbs?)?/i) ||

@@ -1485,7 +1485,7 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
       const pendingLog = messages.find(
         m => m.parsedData && 
         !m.confirmed && 
-        (m.parsedData.type === "food" || m.parsedData.type === "exercise") &&
+        (m.parsedData.type === "food" || m.parsedData.type === "exercise" || m.parsedData.type === "activity_suggestion") &&
         m.parsedData.items.length > 0
       );
 
@@ -2017,8 +2017,10 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
 
       } else {
         // NEW ENTRY OPERATION (food, exercise, or cheat meal)
-        // Cheat calculations are logged as food
-        const entryType = parsedData.type === "cheat_calculation" ? "food" : parsedData.type as "food" | "exercise";
+        // Cheat calculations are logged as food, activity_suggestion should be logged as exercise
+        const entryType = parsedData.type === "cheat_calculation" ? "food" : 
+                          parsedData.type === "activity_suggestion" ? "exercise" :
+                          parsedData.type as "food" | "exercise";
         const entries = parsedData.items.map((item) => ({
           daily_log_id: log.id,
           entry_type: entryType,
@@ -2368,8 +2370,8 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
                         </div>
                       )}
 
-                      {/* For NEW ENTRIES (food/exercise/cheat) */}
-                      {(message.parsedData.type === "food" || message.parsedData.type === "exercise" || message.parsedData.type === "cheat_calculation") && message.parsedData.items.length > 0 && (
+                      {/* For NEW ENTRIES (food/exercise/cheat/activity_suggestion) */}
+                      {(message.parsedData.type === "food" || message.parsedData.type === "exercise" || message.parsedData.type === "cheat_calculation" || message.parsedData.type === "activity_suggestion") && message.parsedData.items.length > 0 && (
                         <div className="space-y-1.5">
                           {message.parsedData.type === "cheat_calculation" && (
                             <div className="text-xs text-gold mb-2">🍔 Cheat meal - log it if you decide to have it:</div>
