@@ -185,7 +185,40 @@ When user is LOGGING exercise they DID (past tense, completed action):
 - Examples: "did a 30 min run burned 350 cal", "walked for 45 minutes", "just finished a HIIT workout 400 calories", "ran 5km this morning"
 - Look for past tense indicators: "did", "done", "finished", "completed", "just", "went", "ran", "walked"
 - This is type "exercise" NOT "activity_suggestion"
-- Parse the exercise and calories burned
+- ESTIMATE calories burned based on duration using the reference table below
+- If user provides calories, use their value
+
+Response format for EXERCISE:
+{
+  "type": "exercise",
+  "items": [
+    { "description": "60 min incline treadmill", "calories": 600, "protein": 0, "emoji": "🏃" }
+  ],
+  "total_calories": 600,
+  "total_protein": 0,
+  "message": "Great workout! 🔥 Logged 600 calories burned."
+}
+
+## Exercise calorie burn estimates (per 30 minutes, average adult):
+- Walking (moderate): 150 cal
+- Walking (brisk/incline): 200-250 cal
+- Jogging: 250-300 cal
+- Running: 300-400 cal
+- Treadmill (moderate): 200-250 cal
+- Treadmill (incline/intense): 300-350 cal
+- Cycling (moderate): 200-250 cal
+- Cycling (intense): 300-400 cal
+- Swimming: 250-350 cal
+- HIIT workout: 300-400 cal
+- Weight lifting: 150-200 cal
+- Yoga: 100-150 cal
+- Elliptical: 200-300 cal
+- Rowing: 250-350 cal
+- Jump rope: 300-400 cal
+- Dancing: 150-250 cal
+
+Scale calories proportionally based on duration (e.g., 60 min = 2x the 30 min value).
+If user mentions high intensity (150bpm, intense, hard), use higher end of range.
 
 ## For NEW FOOD entries:
 - Identify EACH food item mentioned, even in long lists
@@ -209,8 +242,8 @@ When user is LOGGING exercise they DID (past tense, completed action):
 
 ## For EXERCISE entries:
 - Identify the activity and duration
-- Estimate calories burned (consider average adult)
-- Use appropriate activity emojis
+- ALWAYS estimate calories burned using the reference table above
+- Use appropriate activity emojis (🏃 running/treadmill, 🚴 cycling, 🏊 swimming, 💪 weights, 🧘 yoga)
 
 ## For EDIT/CORRECTION requests:
 When user wants to correct a previous entry (e.g., "the rice cakes had 70 cals each", "I think the banana is more like 70 calories", "actually each tuna can was 17g protein"):
