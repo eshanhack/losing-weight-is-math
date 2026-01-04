@@ -351,43 +351,63 @@ export function calculateProteinGoal(
 // ============================================================================
 
 /**
- * Calculate streak (consecutive days with caloric deficit)
- * Negative balance = deficit = good
+ * Calculate streak (consecutive COMPLETED days with caloric deficit)
+ * 
+ * Rules:
+ * - A day is "completed" at 12am local time (midnight)
+ * - Today doesn't count since it's not finished yet
+ * - Streak = consecutive days ending with negative balance (deficit)
+ * - Streak breaks when a day ends with zero or positive balance (surplus)
+ * - Negative balance = deficit = GOOD for weight loss
  */
 export function calculateStreak(
   dailyBalances: { date: Date; balance: number }[]
 ): number {
   if (dailyBalances.length === 0) return 0;
   
-  // Sort by date descending (most recent first)
-  const sorted = [...dailyBalances].sort(
-    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-  );
-  
-  let streak = 0;
+  // Get today's date at midnight (local time)
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   
-  for (let i = 0; i < sorted.length; i++) {
-    const entryDate = new Date(sorted[i].date);
+  // Filter out today (not completed yet) and sort by date descending
+  const completedDays = dailyBalances
+    .filter(d => {
+      const entryDate = new Date(d.date);
+      entryDate.setHours(0, 0, 0, 0);
+      return entryDate < today; // Only completed days (before today)
+    })
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  
+  if (completedDays.length === 0) return 0;
+  
+  let streak = 0;
+  
+  // Start from yesterday and count backwards
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  
+  for (let i = 0; i < completedDays.length; i++) {
+    const entryDate = new Date(completedDays[i].date);
     entryDate.setHours(0, 0, 0, 0);
     
-    // Check if this is a consecutive day
-    const expectedDate = new Date(today);
+    // Calculate expected date (yesterday - i days)
+    const expectedDate = new Date(yesterday);
     expectedDate.setDate(expectedDate.getDate() - i);
+    expectedDate.setHours(0, 0, 0, 0);
     
-    // Allow for some flexibility - if there's a gap, break the streak
+    // Check if dates match (no gaps allowed)
     const daysDiff = Math.round(
-      (today.getTime() - entryDate.getTime()) / (1000 * 60 * 60 * 24)
+      (expectedDate.getTime() - entryDate.getTime()) / (1000 * 60 * 60 * 24)
     );
     
-    if (daysDiff !== i) {
-      // Gap in data - streak broken
+    if (daysDiff !== 0) {
+      // Gap in data - streak broken (missing day)
       break;
     }
     
-    if (sorted[i].balance < 0) {
-      // Deficit day (negative balance) - streak continues
+    // Check the balance for this completed day
+    if (completedDays[i].balance < 0) {
+      // Deficit day (negative balance) - streak continues!
       streak++;
     } else {
       // Surplus day (zero or positive balance) - streak broken
