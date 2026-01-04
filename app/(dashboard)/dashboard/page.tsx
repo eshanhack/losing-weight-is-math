@@ -423,7 +423,7 @@ function DashboardStats({
                 key={idx}
                 onClick={() => day.date && !day.isLocked && !day.isFuture && onDayClick(day)}
                 disabled={!day.date || day.isLocked || day.isFuture}
-                className={`aspect-square rounded-lg text-xs flex flex-col items-center justify-center transition-all relative p-1 ${
+                className={`aspect-square rounded-lg flex flex-col items-center justify-center transition-all relative p-2 ${
                   !day.date
                     ? "invisible"
                     : day.isLocked
@@ -431,20 +431,20 @@ function DashboardStats({
                     : day.isFuture
                     ? "bg-secondary/20 text-muted-foreground cursor-default"
                     : day.hasData && day.isSuccess
-                    ? "bg-success/10 text-success hover:bg-success/20 border border-success/20"
+                    ? "bg-success/10 hover:bg-success/20 border border-success/30"
                     : day.hasData && !day.isSuccess
-                    ? "bg-danger/10 text-danger hover:bg-danger/20 border border-danger/20"
-                    : "bg-secondary/30 hover:bg-secondary/50 text-muted-foreground"
+                    ? "bg-danger/10 hover:bg-danger/20 border border-danger/30"
+                    : "bg-secondary/30 hover:bg-secondary/50"
                 } ${day.isToday ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}
               >
-                <span className="font-semibold text-sm">{day.date && day.dayOfMonth}</span>
+                <span className="font-bold text-base text-foreground">{day.date && day.dayOfMonth}</span>
                 {day.hasData && (
-                  <div className="flex flex-col items-center mt-0.5">
-                    <span className={`text-[8px] font-medium ${day.isSuccess ? "text-success" : "text-danger"}`}>
-                      {day.balance >= 0 ? "+" : ""}{day.balance}
+                  <div className="flex flex-col items-center mt-1 gap-0.5">
+                    <span className={`text-[11px] font-semibold ${day.isSuccess ? "text-success" : "text-danger"}`}>
+                      {day.balance >= 0 ? "+" : ""}{day.balance} cal
                     </span>
                     {day.protein > 0 && (
-                      <span className="text-[7px] text-muted-foreground">{day.protein}g</span>
+                      <span className="text-[10px] text-muted-foreground">{day.protein}g pro</span>
                     )}
                   </div>
                 )}
