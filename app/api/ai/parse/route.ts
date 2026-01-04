@@ -11,6 +11,52 @@ function getOpenAI() {
   return new OpenAI({ apiKey });
 }
 
+// CalorieNinjas API for accurate nutrition data
+interface CalorieNinjasItem {
+  name: string;
+  calories: number;
+  serving_size_g: number;
+  fat_total_g: number;
+  fat_saturated_g: number;
+  protein_g: number;
+  sodium_mg: number;
+  potassium_mg: number;
+  cholesterol_mg: number;
+  carbohydrates_total_g: number;
+  fiber_g: number;
+  sugar_g: number;
+}
+
+async function getCalorieNinjasData(query: string): Promise<CalorieNinjasItem[]> {
+  const apiKey = process.env.CALORIE_NINJAS_API_KEY;
+  if (!apiKey) {
+    console.log("CalorieNinjas API key not configured");
+    return [];
+  }
+
+  try {
+    const response = await fetch(
+      `https://api.calorieninjas.com/v1/nutrition?query=${encodeURIComponent(query)}`,
+      {
+        headers: {
+          "X-Api-Key": apiKey,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      console.error("CalorieNinjas API error:", response.status);
+      return [];
+    }
+
+    const data = await response.json();
+    return data.items || [];
+  } catch (error) {
+    console.error("CalorieNinjas fetch error:", error);
+    return [];
+  }
+}
+
 const SYSTEM_PROMPT = `You are a nutrition and fitness assistant for a calorie tracking app. Parse the user's natural language input about food, exercise, OR corrections/edits to previous entries.
 
 ## CRITICAL RULES:
@@ -85,21 +131,50 @@ export async function POST(request: Request) {
       );
     }
 
+    // Check for edit/delete operations first (don't need nutrition lookup)
+    const lowerMessage = message.toLowerCase();
+    const isEdit = /\b(update|change|correct|actually|edit|modify|fix|adjust)\b/.test(lowerMessage) && 
+                   !/\b(i ate|i had|i eat|just had|for breakfast|for lunch|for dinner)\b/.test(lowerMessage);
+    const isDelete = /\b(delete|remove|undo)\b/.test(lowerMessage);
+    const isExercise = /\b(run|walk|jog|bike|swim|workout|exercise|gym|cycling|hiit|yoga|lift|weights)\b/.test(lowerMessage);
+
+    // For food entries, get accurate nutrition data from CalorieNinjas
+    let nutritionContext = "";
+    if (!isEdit && !isDelete && !isExercise) {
+      const nutritionData = await getCalorieNinjasData(message);
+      if (nutritionData.length > 0) {
+        nutritionContext = `\n\n## VERIFIED NUTRITION DATA (from CalorieNinjas database - USE THESE VALUES):
+${nutritionData.map(item => 
+  `- ${item.name}: ${Math.round(item.calories)} cal, ${Math.round(item.protein_g)}g protein per ${item.serving_size_g}g serving`
+).join("\n")}
+
+IMPORTANT: Use the verified nutrition data above for accuracy. Only estimate if an item isn't in the verified data.`;
+      }
+    }
+
     // Check if OpenAI is configured
     const openai = getOpenAI();
     if (!openai) {
-      // Return mock response for development
+      // If no OpenAI but we have CalorieNinjas data, use it directly
+      const nutritionData = await getCalorieNinjasData(message);
+      if (nutritionData.length > 0) {
+        return NextResponse.json(buildResponseFromNutritionData(nutritionData, message));
+      }
+      // Fall back to mock response
       return NextResponse.json(getMockResponse(message));
     }
+
+    // Build the prompt with nutrition context
+    const enhancedPrompt = SYSTEM_PROMPT + nutritionContext;
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system", content: enhancedPrompt },
         { role: "user", content: message },
       ],
       temperature: 0.3,
-      max_tokens: 1500, // Increased for complex multi-item entries
+      max_tokens: 1500,
     });
 
     const responseText = completion.choices[0]?.message?.content;
@@ -115,6 +190,17 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("AI Parse error:", error);
 
+    // Try CalorieNinjas as fallback
+    try {
+      const { message } = await request.json();
+      const nutritionData = await getCalorieNinjasData(message);
+      if (nutritionData.length > 0) {
+        return NextResponse.json(buildResponseFromNutritionData(nutritionData, message));
+      }
+    } catch {
+      // Ignore fallback errors
+    }
+
     // Return an error response - UI will hide log/cancel buttons
     return NextResponse.json({
       type: "food",
@@ -126,6 +212,51 @@ export async function POST(request: Request) {
       is_error: true,
     } as AIParseResponse);
   }
+}
+
+// Build response directly from CalorieNinjas data (when OpenAI is unavailable)
+function buildResponseFromNutritionData(data: CalorieNinjasItem[], originalMessage: string): AIParseResponse {
+  const items = data.map(item => ({
+    description: item.name.charAt(0).toUpperCase() + item.name.slice(1),
+    calories: Math.round(item.calories),
+    protein: Math.round(item.protein_g),
+    emoji: getEmojiForFood(item.name),
+  }));
+
+  const totalCalories = items.reduce((sum, item) => sum + item.calories, 0);
+  const totalProtein = items.reduce((sum, item) => sum + item.protein, 0);
+
+  return {
+    type: "food",
+    items,
+    total_calories: totalCalories,
+    total_protein: totalProtein,
+    message: `Got it! 🍽️ Logged ${items.length} item${items.length > 1 ? "s" : ""} (verified nutrition data).`,
+  };
+}
+
+// Get appropriate emoji for food item
+function getEmojiForFood(name: string): string {
+  const lowerName = name.toLowerCase();
+  if (lowerName.includes("egg")) return "🍳";
+  if (lowerName.includes("chicken")) return "🍗";
+  if (lowerName.includes("beef") || lowerName.includes("steak")) return "🥩";
+  if (lowerName.includes("fish") || lowerName.includes("tuna") || lowerName.includes("salmon")) return "🐟";
+  if (lowerName.includes("rice")) return "🍚";
+  if (lowerName.includes("bread") || lowerName.includes("toast")) return "🍞";
+  if (lowerName.includes("banana")) return "🍌";
+  if (lowerName.includes("apple")) return "🍎";
+  if (lowerName.includes("orange")) return "🍊";
+  if (lowerName.includes("yogurt") || lowerName.includes("milk")) return "🥛";
+  if (lowerName.includes("cheese")) return "🧀";
+  if (lowerName.includes("salad") || lowerName.includes("vegetable")) return "🥗";
+  if (lowerName.includes("pizza")) return "🍕";
+  if (lowerName.includes("burger")) return "🍔";
+  if (lowerName.includes("coffee")) return "☕";
+  if (lowerName.includes("avocado")) return "🥑";
+  if (lowerName.includes("berry") || lowerName.includes("blueberry")) return "🫐";
+  if (lowerName.includes("kiwi")) return "🥝";
+  return "🍽️";
 }
 
 // Food database for mock parsing

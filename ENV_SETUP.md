@@ -17,6 +17,10 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 # Get this from: https://platform.openai.com/api-keys
 OPENAI_API_KEY=sk-your-openai-key
 
+# CalorieNinjas (for accurate nutrition data)
+# Get this from: https://calorieninjas.com/api (FREE - 10,000 requests/month)
+CALORIE_NINJAS_API_KEY=your-calorie-ninjas-api-key
+
 # Stripe
 # Get these from: https://dashboard.stripe.com/apikeys
 STRIPE_SECRET_KEY=sk_test_your-stripe-secret
@@ -46,7 +50,13 @@ ADMIN_EMAIL=your-email@example.com
 1. Go to [platform.openai.com](https://platform.openai.com)
 2. Create an API key with GPT-4o access
 
-### 3. Stripe Setup
+### 3. CalorieNinjas Setup (FREE - Accurate Nutrition Data)
+1. Go to [calorieninjas.com/api](https://calorieninjas.com/api)
+2. Sign up for a free account (10,000 requests/month)
+3. Copy your API key from the dashboard
+4. This provides verified nutrition data for 100,000+ foods
+
+### 4. Stripe Setup
 1. Create account at [stripe.com](https://stripe.com)
 2. Get API keys from Developers → API Keys
 3. Create two Products:
