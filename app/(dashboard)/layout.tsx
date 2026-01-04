@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
+import { ToastProvider } from "@/components/ui/toast-provider";
 import type { Profile, Subscription } from "@/types";
 
 // Context to share refresh function across components
@@ -27,6 +28,7 @@ export const useDashboard = () => useContext(DashboardContext);
 const MOBILE_TABS = [
   { href: "/dashboard", label: "Dashboard", icon: "📊" },
   { href: "/dashboard/diary", label: "AI Diary", icon: "💬" },
+  { href: "/dashboard/notifications", label: "Activity", icon: "🔔" },
   { href: "/dashboard/settings", label: "Settings", icon: "⚙️" },
 ] as const;
 
@@ -82,6 +84,7 @@ export default function DashboardLayout({
     : 0;
 
   return (
+    <ToastProvider>
     <DashboardContext.Provider value={{ refreshData, profile, subscription }}>
       <div className="min-h-screen bg-background">
         {/* Desktop Header */}
@@ -102,6 +105,7 @@ export default function DashboardLayout({
               {[
                 { href: "/dashboard", label: "DASHBOARD" },
                 { href: "/dashboard/diary", label: "AI DIARY" },
+                { href: "/dashboard/notifications", label: "ACTIVITY" },
                 { href: "/dashboard/settings", label: "SETTINGS" },
               ].map((item) => {
                 const isActive = pathname === item.href;
@@ -242,5 +246,6 @@ export default function DashboardLayout({
         </nav>
       </div>
     </DashboardContext.Provider>
+    </ToastProvider>
   );
 }

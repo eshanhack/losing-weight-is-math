@@ -11,6 +11,15 @@ import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
 import { useDashboard } from "../layout";
 import { getLocalDateString, formatTime } from "@/lib/date-utils";
+import { useToast } from "@/components/ui/toast-provider";
+import { 
+  logNotification, 
+  createFoodNotification, 
+  createExerciseNotification, 
+  createEditNotification, 
+  createDeleteNotification,
+  createWeightNotification,
+} from "@/lib/notifications";
 import {
   calculateAge,
   calculateBMR,
@@ -507,6 +516,7 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
   const [loading, setLoading] = useState(false);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { showToast } = useToast();
   
   // Use LOCAL date, not UTC!
   const today = getLocalDateString();
@@ -720,6 +730,7 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
           if (updateError) {
             console.error("Error updating entries:", updateError);
             confirmationContent = "❌ Error updating entries. Please try again.";
+            showToast("Error updating entries", "error");
           } else {
             // Recalculate totals
             await recalculateDailyTotals(supabase, log.id);
@@ -733,6 +744,14 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
               updateParts.push(`${parsedData.updates.protein}g protein`);
             }
             confirmationContent = `✅ Updated ${updatedCount} "${parsedData.search_term}" ${updatedCount === 1 ? "entry" : "entries"} to ${updateParts.join(" and ")}!`;
+            
+            // Show toast and log notification
+            showToast(`Updated ${updatedCount} ${parsedData.search_term} entries`, "edit");
+            logNotification(createEditNotification(
+              parsedData.search_term,
+              { calories: parsedData.updates?.calories, protein: parsedData.updates?.protein },
+              updatedCount
+            ));
           }
         }
 
@@ -758,12 +777,17 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
           if (deleteError) {
             console.error("Error deleting entries:", deleteError);
             confirmationContent = "❌ Error deleting entries. Please try again.";
+            showToast("Error deleting entries", "error");
           } else {
             // Recalculate totals
             await recalculateDailyTotals(supabase, log.id);
             
             const deletedCount = matchingEntries.length;
             confirmationContent = `🗑️ Deleted ${deletedCount} "${parsedData.search_term}" ${deletedCount === 1 ? "entry" : "entries"}!`;
+            
+            // Show toast and log notification
+            showToast(`Deleted ${deletedCount} ${parsedData.search_term} entries`, "delete");
+            logNotification(createDeleteNotification(parsedData.search_term, deletedCount));
           }
         }
 
@@ -781,6 +805,7 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
         const { error: insertError } = await supabase.from("log_entries").insert(entries);
         if (insertError) {
           console.error("Error inserting entries:", insertError);
+          showToast("Error logging entry", "error");
           setConfirmingId(null);
           return;
         }
@@ -788,6 +813,23 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
         // Recalculate totals
         await recalculateDailyTotals(supabase, log.id);
         confirmationContent = "✅ Logged! What else did you have?";
+        
+        // Show toast and log notification
+        const itemsForNotification = parsedData.items.map(item => ({
+          description: item.description,
+          calories: item.calories,
+          protein: "protein" in item ? item.protein : 0,
+        }));
+        
+        if (parsedData.type === "food") {
+          const itemNames = parsedData.items.map(i => i.description).join(", ");
+          showToast(`Logged: ${itemNames}`, "food");
+          logNotification(createFoodNotification(itemsForNotification));
+        } else {
+          const itemNames = parsedData.items.map(i => i.description).join(", ");
+          showToast(`Logged: ${itemNames}`, "exercise");
+          logNotification(createExerciseNotification(itemsForNotification));
+        }
       }
 
       // Mark message as confirmed in local state
@@ -1125,6 +1167,7 @@ function DashboardContent() {
   const searchParams = useSearchParams();
   const isWelcome = searchParams.get("welcome") === "true";
   const { profile, subscription, refreshData } = useDashboard();
+  const { showToast } = useToast();
 
   const [logs, setLogs] = useState<DailyLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1447,6 +1490,14 @@ function DashboardContent() {
         : e
     ));
     
+    // Show toast and log notification
+    showToast(`Updated ${editForm.description}`, "edit");
+    logNotification(createEditNotification(
+      editingEntry.description,
+      { calories: editForm.calories, protein: editForm.protein },
+      1
+    ));
+    
     cancelEditEntry();
     fetchData(); // Refresh dashboard
   };
@@ -1497,7 +1548,15 @@ function DashboardContent() {
     }
 
     // Update local state
+    const deletedEntry = dayEntries.find(e => e.id === entryId);
     setDayEntries(prev => prev.filter(e => e.id !== entryId));
+    
+    // Show toast and log notification
+    if (deletedEntry) {
+      showToast(`Deleted ${deletedEntry.description}`, "delete");
+      logNotification(createDeleteNotification(deletedEntry.description, 1));
+    }
+    
     fetchData(); // Refresh dashboard
   };
 
@@ -1510,6 +1569,10 @@ function DashboardContent() {
       { user_id: user.id, log_date: date, weight_kg: weight },
       { onConflict: "user_id,log_date" }
     );
+
+    // Show toast and log notification
+    showToast(`Weight logged: ${weight} kg`, "weight");
+    logNotification(createWeightNotification(weight, date));
 
     fetchData();
     setSelectedDay(null);
