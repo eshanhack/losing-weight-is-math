@@ -185,10 +185,10 @@ function DashboardStats({
       <div className="flex items-center justify-between gap-4">
         <div className="shrink-0">
           <h1 className="font-display text-2xl lg:text-3xl font-semibold text-foreground">
-            My Progress
+            Dashboard
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Track your daily caloric balance
+            Daily logging + Deficit consistency = Results
           </p>
         </div>
         {/* Protein Progress Bar */}
@@ -248,7 +248,7 @@ function DashboardStats({
                     ) : (
                       <div className="flex items-center gap-1.5">
                         <span>🍴</span>
-                        <span>Can eat <span className="font-medium">{Math.abs(stats.todayBalance).toLocaleString()}</span> before maintenance</span>
+                        <span>Can eat <span className="text-danger font-semibold">{Math.abs(stats.todayBalance).toLocaleString()}</span> before maintenance</span>
                       </div>
                     )}
                   </div>
