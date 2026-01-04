@@ -198,6 +198,8 @@ export interface AIParseResponse {
     protein?: number;
     description?: string;
   };
+  // Error flag - when true, don't show log/cancel buttons
+  is_error?: boolean;
 }
 
 // ============================================================================

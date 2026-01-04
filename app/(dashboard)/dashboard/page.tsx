@@ -906,7 +906,8 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
                 >
                   <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
 
-                  {message.parsedData && !message.confirmed && (
+                  {/* Only show parsed data UI if it's NOT an error */}
+                  {message.parsedData && !message.confirmed && !message.parsedData.is_error && (
                     <div className="mt-3 pt-3 border-t border-white/10">
                       {/* For EDIT operations */}
                       {message.parsedData.type === "edit" && message.parsedData.search_term && (
@@ -943,7 +944,7 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
                       )}
 
                       {/* For NEW ENTRIES (food/exercise) */}
-                      {(message.parsedData.type === "food" || message.parsedData.type === "exercise") && (
+                      {(message.parsedData.type === "food" || message.parsedData.type === "exercise") && message.parsedData.items.length > 0 && (
                         <div className="space-y-1.5">
                           {message.parsedData.items.map((item, idx) => (
                             <div key={idx} className="flex justify-between gap-3 text-xs">

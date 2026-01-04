@@ -115,21 +115,15 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("AI Parse error:", error);
 
-    // Return a fallback response
+    // Return an error response - UI will hide log/cancel buttons
     return NextResponse.json({
       type: "food",
-      items: [
-        {
-          description: "Unknown item",
-          calories: 0,
-          protein: 0,
-          emoji: "❓",
-        },
-      ],
+      items: [],
       total_calories: 0,
       total_protein: 0,
       message:
         "I couldn't quite understand that. Could you be more specific about what you ate or what exercise you did?",
+      is_error: true,
     } as AIParseResponse);
   }
 }
