@@ -220,24 +220,40 @@ function DashboardStats({
               }`}>
                 <span className="text-lg">📊</span>
               </div>
-              {/* Top right: Goal & Maintenance indicators */}
-              <div className="flex flex-col items-end gap-0.5">
-                <span className={`text-xs font-medium ${
-                  formattedBalance.color === "success" ? "text-success" : 
-                  formattedBalance.color === "warning" ? "text-gold" : 
-                  formattedBalance.color === "danger" ? "text-danger" : "text-muted-foreground"
-                }`}>
-                  {formattedBalance.toGoal <= 0 
-                    ? `✓ Goal hit${formattedBalance.toGoal < 0 ? ` +${Math.abs(formattedBalance.toGoal)}` : ''}`
-                    : `${formattedBalance.toGoal.toLocaleString()} to goal`
-                  }
-                </span>
-                <span className="text-[10px] text-muted-foreground">
-                  {formattedBalance.toMaintenance > 0 
-                    ? `${formattedBalance.toMaintenance.toLocaleString()} to maint.`
-                    : `${Math.abs(formattedBalance.toMaintenance).toLocaleString()} over maint.`
-                  }
-                </span>
+              {/* Top right: Goal & Maintenance action indicators */}
+              <div className="flex flex-col items-end gap-1">
+                {/* To Goal indicator */}
+                {formattedBalance.toGoal > 0 ? (
+                  // Behind goal: need to burn more
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <span className="text-muted-foreground">🔥</span>
+                    <span className="text-success font-medium">{formattedBalance.toGoal.toLocaleString()}</span>
+                    <span className="text-muted-foreground">to goal</span>
+                  </div>
+                ) : (
+                  // Exceeded goal: can eat more
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <span className="text-muted-foreground">🍽️</span>
+                    <span className="text-danger font-medium">{Math.abs(formattedBalance.toGoal).toLocaleString()}</span>
+                    <span className="text-muted-foreground">to goal</span>
+                  </div>
+                )}
+                {/* To Maintenance indicator */}
+                {stats.todayBalance >= 0 ? (
+                  // In surplus: need to burn to get back
+                  <div className="flex items-center gap-1.5 text-[10px]">
+                    <span className="text-muted-foreground">🏃</span>
+                    <span className="text-success font-medium">{stats.todayBalance.toLocaleString()}</span>
+                    <span className="text-muted-foreground">to maint.</span>
+                  </div>
+                ) : (
+                  // In deficit: can eat more before maintenance
+                  <div className="flex items-center gap-1.5 text-[10px]">
+                    <span className="text-muted-foreground">🍴</span>
+                    <span className="text-danger font-medium">{Math.abs(stats.todayBalance).toLocaleString()}</span>
+                    <span className="text-muted-foreground">to maint.</span>
+                  </div>
+                )}
               </div>
             </div>
             <h3 className="font-display font-semibold text-foreground mb-0.5">Today's Balance</h3>
