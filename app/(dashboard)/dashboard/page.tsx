@@ -708,24 +708,42 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
 
       {/* Input */}
       <div className="p-4 border-t border-border">
-        <form onSubmit={handleSubmit} className="flex gap-2">
-          <input
+        <form onSubmit={handleSubmit} className="flex gap-2 items-end">
+          <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                if (input.trim() && !loading) {
+                  handleSubmit(e);
+                }
+              }
+            }}
             placeholder="What did you eat or do?"
-            className="flex-1 h-10 px-4 text-sm bg-secondary border-0 rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+            rows={1}
+            className="flex-1 min-h-10 max-h-32 px-4 py-2.5 text-sm bg-secondary border-0 rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
             disabled={loading}
+            style={{ height: 'auto' }}
+            onInput={(e) => {
+              const target = e.target as HTMLTextAreaElement;
+              target.style.height = 'auto';
+              target.style.height = Math.min(target.scrollHeight, 128) + 'px';
+            }}
           />
           <Button 
             type="submit" 
             disabled={loading || !input.trim()} 
-            className="h-10 w-10 bg-primary hover:bg-primary/90 rounded-lg p-0"
+            className="h-10 w-10 bg-primary hover:bg-primary/90 rounded-lg p-0 shrink-0"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
             </svg>
           </Button>
         </form>
+        <p className="text-[10px] text-muted-foreground mt-1.5 text-center">
+          Press Enter to send • Shift+Enter for new line
+        </p>
       </div>
     </div>
   );
