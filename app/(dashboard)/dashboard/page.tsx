@@ -453,8 +453,12 @@ function DashboardStats({
                 } ${day.isToday ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}
               >
                 <span className="font-bold text-base text-foreground">{day.date && day.dayOfMonth}</span>
+                {/* Show weight if logged */}
+                {day.weight && (
+                  <span className="text-[10px] text-blue-400 font-medium">{day.weight}kg</span>
+                )}
                 {day.hasData && (
-                  <div className="flex flex-col items-center mt-1 gap-0.5">
+                  <div className="flex flex-col items-center mt-0.5 gap-0.5">
                     <span className={`text-[11px] font-semibold ${day.isSuccess ? "text-success" : "text-danger"}`}>
                       {day.balance >= 0 ? "+" : ""}{day.balance} cal
                     </span>
