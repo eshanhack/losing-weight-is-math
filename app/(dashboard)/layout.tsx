@@ -1,13 +1,184 @@
 "use client";
 
-import { useState, useEffect, createContext, useContext, useCallback } from "react";
+import { useState, useEffect, createContext, useContext, useCallback, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { ToastProvider } from "@/components/ui/toast-provider";
 import type { Profile, Subscription } from "@/types";
+
+// Notification type icons
+const NOTIFICATION_ICONS: Record<string, string> = {
+  food: "🍽️",
+  exercise: "🏃",
+  weight: "⚖️",
+  edit: "✏️",
+  delete: "🗑️",
+  goal: "🎯",
+  streak: "🔥",
+  system: "📢",
+};
+
+interface Notification {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  created_at: string;
+}
+
+// Notifications Dropdown Component
+function NotificationsDropdown() {
+  const [isOpen, setIsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Fetch notifications when dropdown opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchNotifications();
+    }
+  }, [isOpen]);
+
+  const fetchNotifications = async () => {
+    setLoading(true);
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data } = await supabase
+        .from("notifications")
+        .select("id, type, title, message, created_at")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(5);
+
+      setNotifications(data || []);
+    } catch (error) {
+      console.log("Error fetching notifications:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatTimeAgo = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  };
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      {/* Bell Button */}
+      <button 
+        onClick={() => setIsOpen(!isOpen)}
+        className={`w-9 h-9 rounded-lg bg-secondary flex items-center justify-center transition-colors ${
+          isOpen ? "text-primary" : "text-muted-foreground hover:text-foreground"
+        }`}
+      >
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+        </svg>
+      </button>
+
+      {/* Dropdown Panel */}
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+            transition={{ duration: 0.15 }}
+            className="absolute right-0 top-12 w-80 bg-card border border-border rounded-xl shadow-xl overflow-hidden z-50"
+          >
+            {/* Header */}
+            <div className="px-4 py-3 border-b border-border bg-secondary/50">
+              <h3 className="font-display font-semibold text-sm">Recent Activity</h3>
+            </div>
+
+            {/* Notifications List */}
+            <div className="max-h-80 overflow-y-auto">
+              {loading ? (
+                <div className="p-6 text-center">
+                  <div className="flex justify-center gap-1">
+                    <span className="w-2 h-2 bg-primary rounded-full animate-bounce" />
+                    <span className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "0.1s" }} />
+                    <span className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "0.2s" }} />
+                  </div>
+                </div>
+              ) : notifications.length === 0 ? (
+                <div className="p-6 text-center">
+                  <span className="text-3xl mb-2 block">📭</span>
+                  <p className="text-sm text-muted-foreground">No recent activity</p>
+                  <p className="text-xs text-muted-foreground/70 mt-1">Log some food or exercise to get started!</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {notifications.map((notification) => (
+                    <div 
+                      key={notification.id} 
+                      className="px-4 py-3 hover:bg-secondary/30 transition-colors"
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className="text-lg mt-0.5">
+                          {NOTIFICATION_ICONS[notification.type] || "📋"}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">
+                            {notification.title}
+                          </p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {notification.message}
+                          </p>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground/70 whitespace-nowrap">
+                          {formatTimeAgo(notification.created_at)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Footer - View All */}
+            <Link 
+              href="/dashboard/notifications" 
+              onClick={() => setIsOpen(false)}
+              className="block px-4 py-3 text-center text-sm font-medium text-primary hover:bg-primary/5 border-t border-border transition-colors"
+            >
+              View all activity →
+            </Link>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
 
 // Context to share refresh function across components
 interface DashboardContextType {
@@ -126,23 +297,6 @@ export default function DashboardLayout({
 
             {/* Right side */}
             <div className="flex items-center gap-4">
-              {/* Search (placeholder) */}
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Search..."
-                  className="w-48 h-9 pl-9 pr-4 text-sm bg-secondary border-0 rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                />
-                <svg
-                  className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </div>
-
               {/* Trial badge */}
               {isTrialing && (
                 <Link href="/dashboard/subscribe">
@@ -157,12 +311,8 @@ export default function DashboardLayout({
                 </Link>
               )}
 
-              {/* Notifications */}
-              <button className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                </svg>
-              </button>
+              {/* Notifications Dropdown */}
+              <NotificationsDropdown />
 
               {/* User avatar */}
               {profile && (
