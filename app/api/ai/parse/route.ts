@@ -165,12 +165,11 @@ Response format for CHEAT_CALCULATION:
   "message": "🍔 Let me calculate the impact of that Big Mac for you..."
 }
 
-## For ACTIVITY/BURN QUESTIONS:
-When user asks how to burn calories or what exercise to do:
-- Examples: "what can I do to burn 312 calories?", "how do I burn 500 cal?", "what exercise burns X calories?", "I need to burn 200"
-- Extract the calorie amount they want to burn
+## For ACTIVITY/BURN QUESTIONS (asking for suggestions, NOT logging):
+When user ASKS how to burn calories (question format):
+- ONLY use this for QUESTIONS like: "what can I do to burn 312 calories?", "how do I burn 500 cal?", "what exercise burns X calories?"
+- Must contain question words: "what", "how", "can I", "should I", "ways to"
 - Use type "activity_suggestion"
-- Return the calories to burn in total_calories field
 
 Response format for ACTIVITY_SUGGESTION:
 {
@@ -180,6 +179,13 @@ Response format for ACTIVITY_SUGGESTION:
   "total_protein": 0,
   "message": "Here are some ways to burn 312 calories..."
 }
+
+## For EXERCISE entries (logging completed exercise):
+When user is LOGGING exercise they DID (past tense, completed action):
+- Examples: "did a 30 min run burned 350 cal", "walked for 45 minutes", "just finished a HIIT workout 400 calories", "ran 5km this morning"
+- Look for past tense indicators: "did", "done", "finished", "completed", "just", "went", "ran", "walked"
+- This is type "exercise" NOT "activity_suggestion"
+- Parse the exercise and calories burned
 
 ## For NEW FOOD entries:
 - Identify EACH food item mentioned, even in long lists
