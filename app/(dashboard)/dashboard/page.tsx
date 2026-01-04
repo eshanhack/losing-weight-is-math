@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense, useRef } from "react";
+import { useState, useEffect, Suspense, useRef, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card } from "@/components/ui/card";
@@ -23,6 +23,49 @@ import {
   formatBalance,
 } from "@/lib/math";
 import type { Profile, DailyLog, Subscription, AIParseResponse, LogEntry } from "@/types";
+
+// ============================================================================
+// RESIZABLE PANEL HOOK
+// ============================================================================
+
+function useResizable(initialWidth: number, minWidth: number, maxWidth: number) {
+  const [width, setWidth] = useState(initialWidth);
+  const [isResizing, setIsResizing] = useState(false);
+
+  const startResizing = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  }, []);
+
+  const stopResizing = useCallback(() => {
+    setIsResizing(false);
+  }, []);
+
+  const resize = useCallback(
+    (e: MouseEvent) => {
+      if (isResizing) {
+        const newWidth = window.innerWidth - e.clientX;
+        if (newWidth >= minWidth && newWidth <= maxWidth) {
+          setWidth(newWidth);
+        }
+      }
+    },
+    [isResizing, minWidth, maxWidth]
+  );
+
+  useEffect(() => {
+    if (isResizing) {
+      window.addEventListener("mousemove", resize);
+      window.addEventListener("mouseup", stopResizing);
+    }
+    return () => {
+      window.removeEventListener("mousemove", resize);
+      window.removeEventListener("mouseup", stopResizing);
+    };
+  }, [isResizing, resize, stopResizing]);
+
+  return { width, isResizing, startResizing };
+}
 
 // ============================================================================
 // TYPES
@@ -83,19 +126,19 @@ function DashboardStats({
   const formattedSevenDay = formatBalance(stats.sevenDayBalance);
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6 h-full">
       {/* Header */}
       <div>
-        <h1 className="font-display text-2xl lg:text-4xl font-bold">
+        <h1 className="font-display text-2xl lg:text-3xl font-bold">
           Hey {profile?.first_name} 👋
         </h1>
-        <p className="text-muted-foreground mt-1">
+        <p className="text-muted-foreground text-sm mt-1">
           Here's your progress at a glance
         </p>
       </div>
 
-      {/* Stat Cards - 4 columns on desktop */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Stat Cards - responsive grid */}
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 lg:gap-4">
         {/* Card 1: Today's Balance */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
@@ -103,18 +146,18 @@ function DashboardStats({
           transition={{ delay: 0.1 }}
         >
           <Card
-            className={`p-5 bg-card border-border transition-all h-full ${
+            className={`p-4 lg:p-5 bg-card border-border transition-all h-full ${
               formattedBalance.isDeficit ? "border-success/30" : stats.todayBalance > 0 ? "border-danger/30" : ""
             }`}
           >
-            <p className="text-xs text-muted-foreground mb-2">Today</p>
-            <p className={`font-display text-3xl font-bold ${
+            <p className="text-xs text-muted-foreground mb-1">Today</p>
+            <p className={`font-display text-2xl lg:text-3xl font-bold ${
               formattedBalance.color === "success" ? "text-success" : formattedBalance.color === "danger" ? "text-danger" : ""
             }`}>
               {formattedBalance.text}
             </p>
-            <p className="text-sm text-muted-foreground">kcal</p>
-            <div className="mt-3 pt-3 border-t border-border text-sm text-muted-foreground space-y-1">
+            <p className="text-xs lg:text-sm text-muted-foreground">kcal</p>
+            <div className="mt-2 pt-2 border-t border-border text-xs lg:text-sm text-muted-foreground space-y-0.5">
               <div className="flex justify-between">
                 <span>In</span>
                 <span>{stats.todayIntake}</span>
@@ -137,19 +180,19 @@ function DashboardStats({
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15 }}
         >
-          <Card className={`p-5 bg-card border-border h-full ${formattedSevenDay.isDeficit ? "border-success/30" : ""}`}>
-            <p className="text-xs text-muted-foreground mb-2">7-Day Total</p>
-            <p className={`font-display text-3xl font-bold ${
+          <Card className={`p-4 lg:p-5 bg-card border-border h-full ${formattedSevenDay.isDeficit ? "border-success/30" : ""}`}>
+            <p className="text-xs text-muted-foreground mb-1">7-Day Total</p>
+            <p className={`font-display text-2xl lg:text-3xl font-bold ${
               formattedSevenDay.color === "success" ? "text-success" : formattedSevenDay.color === "danger" ? "text-danger" : ""
             }`}>
               {formattedSevenDay.text}
             </p>
-            <p className="text-sm text-muted-foreground">kcal</p>
-            <div className="mt-3 pt-3 border-t border-border">
-              <p className="text-sm text-muted-foreground">
-                Daily avg: <span className={`font-medium ${stats.sevenDayAverage < 0 ? "text-success" : "text-danger"}`}>
+            <p className="text-xs lg:text-sm text-muted-foreground">kcal</p>
+            <div className="mt-2 pt-2 border-t border-border">
+              <p className="text-xs lg:text-sm text-muted-foreground">
+                Avg: <span className={`font-medium ${stats.sevenDayAverage < 0 ? "text-success" : "text-danger"}`}>
                   {stats.sevenDayAverage < 0 ? "" : "+"}{stats.sevenDayAverage}
-                </span>
+                </span>/day
               </p>
             </div>
           </Card>
@@ -161,14 +204,14 @@ function DashboardStats({
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
         >
-          <Card className="p-5 bg-card border-border h-full">
-            <p className="text-xs text-muted-foreground mb-2">Real Weight</p>
-            <p className="font-display text-3xl font-bold">
+          <Card className="p-4 lg:p-5 bg-card border-border h-full">
+            <p className="text-xs text-muted-foreground mb-1">Real Weight</p>
+            <p className="font-display text-2xl lg:text-3xl font-bold">
               {stats.realWeight?.toFixed(1) || "—"}
             </p>
-            <p className="text-sm text-muted-foreground">kg</p>
-            <div className="mt-3 pt-3 border-t border-border">
-              <p className="text-sm text-muted-foreground">7-day average</p>
+            <p className="text-xs lg:text-sm text-muted-foreground">kg</p>
+            <div className="mt-2 pt-2 border-t border-border">
+              <p className="text-xs lg:text-sm text-muted-foreground">7-day average</p>
             </div>
           </Card>
         </motion.div>
@@ -179,47 +222,49 @@ function DashboardStats({
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.25 }}
         >
-          <Card className="p-5 bg-card border-border border-gold/20 h-full">
-            <p className="text-xs text-muted-foreground mb-2">Streak</p>
-            <p className="font-display text-3xl font-bold text-gold">
+          <Card className="p-4 lg:p-5 bg-card border-border border-gold/20 h-full">
+            <p className="text-xs text-muted-foreground mb-1">Streak</p>
+            <p className="font-display text-2xl lg:text-3xl font-bold text-gold">
               🔥 {stats.streak}
             </p>
-            <p className="text-sm text-muted-foreground">days</p>
-            <div className="mt-3 pt-3 border-t border-border">
-              <p className="text-sm text-muted-foreground">Keep it going!</p>
+            <p className="text-xs lg:text-sm text-muted-foreground">days</p>
+            <div className="mt-2 pt-2 border-t border-border">
+              <p className="text-xs lg:text-sm text-muted-foreground">Keep going!</p>
             </div>
           </Card>
         </motion.div>
       </div>
 
-      {/* Calendar - Full size */}
+      {/* Calendar - responsive */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3 }}
+        className="flex-1"
       >
-        <Card className="p-6 bg-card border-border">
-          <h2 className="font-display text-lg font-semibold mb-4">
+        <Card className="p-4 lg:p-6 bg-card border-border h-full">
+          <h2 className="font-display text-base lg:text-lg font-semibold mb-3 lg:mb-4">
             {new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}
           </h2>
 
           {/* Day headers */}
-          <div className="grid grid-cols-7 gap-2 mb-2">
-            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day, i) => (
-              <div key={i} className="text-center text-sm text-muted-foreground font-medium py-2">
-                {day}
+          <div className="grid grid-cols-7 gap-1 lg:gap-2 mb-1 lg:mb-2">
+            {["S", "M", "T", "W", "T", "F", "S"].map((day, i) => (
+              <div key={i} className="text-center text-xs lg:text-sm text-muted-foreground font-medium py-1 lg:py-2">
+                <span className="hidden lg:inline">{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][i]}</span>
+                <span className="lg:hidden">{day}</span>
               </div>
             ))}
           </div>
 
           {/* Calendar grid */}
-          <div className="grid grid-cols-7 gap-2">
+          <div className="grid grid-cols-7 gap-1 lg:gap-2">
             {calendar.map((day, idx) => (
               <button
                 key={idx}
                 onClick={() => day.date && !day.isLocked && !day.isFuture && onDayClick(day)}
                 disabled={!day.date || day.isLocked || day.isFuture}
-                className={`aspect-square rounded-lg text-sm flex flex-col items-center justify-center transition-all relative p-2 ${
+                className={`aspect-square rounded lg:rounded-lg text-xs lg:text-sm flex flex-col items-center justify-center transition-all relative p-1 lg:p-2 ${
                   !day.date
                     ? "invisible"
                     : day.isLocked
@@ -235,24 +280,24 @@ function DashboardStats({
               >
                 <span className="font-medium">{day.date && day.dayOfMonth}</span>
                 {day.weight && (
-                  <span className="text-[10px] text-muted-foreground mt-0.5">{day.weight}kg</span>
+                  <span className="text-[8px] lg:text-[10px] text-muted-foreground mt-0.5 hidden sm:block">{day.weight}kg</span>
                 )}
               </button>
             ))}
           </div>
 
           {/* Legend */}
-          <div className="flex items-center gap-6 mt-4 pt-4 border-t border-border text-sm text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded bg-success/20 border border-success/30"></div>
-              <span>Deficit (good)</span>
+          <div className="flex flex-wrap items-center gap-3 lg:gap-6 mt-3 lg:mt-4 pt-3 lg:pt-4 border-t border-border text-xs lg:text-sm text-muted-foreground">
+            <div className="flex items-center gap-1.5 lg:gap-2">
+              <div className="w-2.5 h-2.5 lg:w-3 lg:h-3 rounded bg-success/20 border border-success/30"></div>
+              <span>Deficit</span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded bg-danger/20 border border-danger/30"></div>
+            <div className="flex items-center gap-1.5 lg:gap-2">
+              <div className="w-2.5 h-2.5 lg:w-3 lg:h-3 rounded bg-danger/20 border border-danger/30"></div>
               <span>Surplus</span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded ring-2 ring-primary"></div>
+            <div className="flex items-center gap-1.5 lg:gap-2">
+              <div className="w-2.5 h-2.5 lg:w-3 lg:h-3 rounded ring-2 ring-primary"></div>
               <span>Today</span>
             </div>
           </div>
@@ -540,6 +585,83 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
 }
 
 // ============================================================================
+// RESIZABLE SPLIT VIEW
+// ============================================================================
+
+function ResizableSplitView({
+  stats,
+  calendar,
+  profile,
+  logs,
+  onDayClick,
+  onEntryConfirmed,
+}: {
+  stats: {
+    todayBalance: number;
+    todayIntake: number;
+    todayOuttake: number;
+    todayProtein: number;
+    proteinGoal: number;
+    maintenanceCalories: number;
+    sevenDayBalance: number;
+    sevenDayAverage: number;
+    realWeight: number | null;
+    realWeightChange: number | null;
+    predictedWeight: number | null;
+    predictedChange: number | null;
+    streak: number;
+  };
+  calendar: CalendarDay[];
+  profile: Profile | null;
+  logs: DailyLog[];
+  onDayClick: (day: CalendarDay) => void;
+  onEntryConfirmed: () => void;
+}) {
+  const { width: diaryWidth, isResizing, startResizing } = useResizable(380, 280, 600);
+
+  return (
+    <div className="hidden lg:flex h-[calc(100vh-4rem)]">
+      {/* Left: Dashboard (main content) */}
+      <div 
+        className="flex-1 overflow-y-auto p-6"
+        style={{ userSelect: isResizing ? "none" : "auto" }}
+      >
+        <DashboardStats 
+          stats={stats} 
+          calendar={calendar} 
+          profile={profile} 
+          logs={logs}
+          onDayClick={onDayClick} 
+        />
+      </div>
+
+      {/* Resizable divider */}
+      <div
+        className={`w-1 hover:w-1.5 bg-border hover:bg-primary/50 cursor-col-resize transition-all flex items-center justify-center group ${
+          isResizing ? "bg-primary/50 w-1.5" : ""
+        }`}
+        onMouseDown={startResizing}
+      >
+        <div className={`w-0.5 h-8 rounded-full bg-muted-foreground/30 group-hover:bg-primary transition-colors ${
+          isResizing ? "bg-primary" : ""
+        }`} />
+      </div>
+
+      {/* Right: AI Diary (resizable sidebar) */}
+      <div 
+        className="border-l border-border flex flex-col bg-card/30"
+        style={{ 
+          width: diaryWidth,
+          userSelect: isResizing ? "none" : "auto"
+        }}
+      >
+        <AIDiary onEntryConfirmed={onEntryConfirmed} />
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
 // MAIN DASHBOARD PAGE
 // ============================================================================
 
@@ -758,24 +880,15 @@ function DashboardContent() {
         )}
       </AnimatePresence>
 
-      {/* Desktop: Split view */}
-      <div className="hidden lg:flex h-[calc(100vh-4rem)]">
-        {/* Left: Dashboard (main content) */}
-        <div className="flex-1 overflow-y-auto p-6">
-          <DashboardStats 
-            stats={stats} 
-            calendar={calendar} 
-            profile={profile} 
-            logs={logs}
-            onDayClick={setSelectedDay} 
-          />
-        </div>
-
-        {/* Right: AI Diary (sidebar) */}
-        <div className="w-[380px] xl:w-[420px] border-l border-border flex flex-col bg-card/30">
-          <AIDiary onEntryConfirmed={handleEntryConfirmed} />
-        </div>
-      </div>
+      {/* Desktop: Resizable split view */}
+      <ResizableSplitView
+        stats={stats}
+        calendar={calendar}
+        profile={profile}
+        logs={logs}
+        onDayClick={setSelectedDay}
+        onEntryConfirmed={handleEntryConfirmed}
+      />
 
       {/* Mobile: Just dashboard (diary is separate tab) */}
       <div className="lg:hidden p-4">
