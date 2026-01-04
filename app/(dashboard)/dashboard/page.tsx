@@ -879,6 +879,17 @@ function generateCheatMealImpact(ctx: CheatMealContext): string {
 // AI DIARY COMPONENT
 // ============================================================================
 
+// Saved Meal type for @ mentions
+interface SavedMealLocal {
+  id: string;
+  name: string;
+  display_name: string;
+  description: string;
+  summary: string;
+  total_calories: number;
+  total_protein: number;
+}
+
 function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConfirmed: () => void; todayHasWeight: boolean; dataLoaded: boolean }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -886,8 +897,16 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [upgradeReminderShown, setUpgradeReminderShown] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const { showToast } = useToast();
   const { trialInfo } = useDashboard();
+  
+  // Saved meals state
+  const [savedMeals, setSavedMeals] = useState<SavedMealLocal[]>([]);
+  const [showMealDropdown, setShowMealDropdown] = useState(false);
+  const [mealFilter, setMealFilter] = useState("");
+  const [selectedMealIndex, setSelectedMealIndex] = useState(0);
+  const [pendingSaveMeal, setPendingSaveMeal] = useState<{ items: Array<{ description: string; calories: number; protein: number; emoji: string }>; totalCal: number; totalProtein: number } | null>(null);
   
   // Use a REF to track if weight reminder has been checked - refs persist and don't cause re-renders
   const weightReminderCheckedRef = useRef(false);
@@ -897,7 +916,220 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
 
   useEffect(() => {
     loadChatHistoryAndCheckWeight();
+    loadSavedMeals();
   }, []);
+
+  // Load saved meals for @ mentions
+  const loadSavedMeals = async () => {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data, error } = await supabase
+      .from("saved_meals")
+      .select("id, name, display_name, description, summary, total_calories, total_protein")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
+
+    if (!error && data) {
+      setSavedMeals(data);
+    }
+  };
+
+  // Filter meals based on current input after @
+  const filteredMeals = savedMeals.filter(meal => 
+    meal.name.toLowerCase().includes(mealFilter.toLowerCase()) ||
+    meal.display_name.toLowerCase().includes(mealFilter.toLowerCase())
+  );
+
+  // Handle input change for @ detection
+  const handleInputChange = (value: string) => {
+    setInput(value);
+    
+    // Check for @ mention
+    const atIndex = value.lastIndexOf("@");
+    if (atIndex !== -1) {
+      const afterAt = value.slice(atIndex + 1);
+      // Only show dropdown if @ is at start of word or string
+      const beforeAt = value.slice(0, atIndex);
+      const isValidTrigger = beforeAt === "" || beforeAt.endsWith(" ") || beforeAt.endsWith("\n");
+      
+      if (isValidTrigger && !afterAt.includes(" ")) {
+        setShowMealDropdown(true);
+        setMealFilter(afterAt);
+        setSelectedMealIndex(0);
+      } else {
+        setShowMealDropdown(false);
+      }
+    } else {
+      setShowMealDropdown(false);
+    }
+  };
+
+  // Insert selected meal into input
+  const insertMeal = (meal: SavedMealLocal) => {
+    const atIndex = input.lastIndexOf("@");
+    const beforeAt = input.slice(0, atIndex);
+    setInput(beforeAt + meal.description);
+    setShowMealDropdown(false);
+    setMealFilter("");
+    inputRef.current?.focus();
+  };
+
+  // Handle keyboard navigation in dropdown
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (showMealDropdown && filteredMeals.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setSelectedMealIndex(prev => Math.min(prev + 1, filteredMeals.length - 1));
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setSelectedMealIndex(prev => Math.max(prev - 1, 0));
+      } else if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        insertMeal(filteredMeals[selectedMealIndex]);
+      } else if (e.key === "Escape") {
+        setShowMealDropdown(false);
+      }
+    }
+  };
+
+  // Create a saved meal from /create command
+  const handleCreateMealCommand = async (input: string) => {
+    const match = input.match(/^\/create\s+([a-z0-9-]+)\s+(.+)$/i);
+    if (!match) {
+      setMessages(prev => [...prev, {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: "❌ Invalid format. Use: `/create meal-name description of ingredients`\n\nExample: `/create can-sushi can of tuna, can of salmon, greek yogurt`",
+        timestamp: new Date().toISOString(),
+      }]);
+      return true;
+    }
+
+    const [, mealName, description] = match;
+    const normalizedName = mealName.toLowerCase();
+
+    setLoading(true);
+    
+    // Parse the meal through AI to get calories/protein
+    try {
+      const response = await fetch("/api/ai/parse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: description }),
+      });
+      const data = await response.json();
+
+      if (data.type !== "food" || !data.items || data.items.length === 0) {
+        setMessages(prev => [...prev, {
+          id: Date.now().toString(),
+          role: "assistant",
+          content: "❌ Couldn't parse that as food items. Try describing the ingredients more clearly.",
+          timestamp: new Date().toISOString(),
+        }]);
+        setLoading(false);
+        return true;
+      }
+
+      // Generate a short summary (first 3 items + "...")
+      const itemNames = data.items.slice(0, 3).map((i: { description: string }) => i.description);
+      const summary = itemNames.join(", ") + (data.items.length > 3 ? "..." : "");
+
+      // Save to database
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setLoading(false);
+        return true;
+      }
+
+      const { error } = await supabase.from("saved_meals").upsert({
+        user_id: user.id,
+        name: normalizedName,
+        display_name: mealName.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase()),
+        description: description,
+        summary: summary,
+        total_calories: data.total_calories,
+        total_protein: data.total_protein,
+        items: data.items,
+        updated_at: new Date().toISOString(),
+      }, {
+        onConflict: "user_id,name",
+      });
+
+      if (error) {
+        console.error("Error saving meal:", error);
+        setMessages(prev => [...prev, {
+          id: Date.now().toString(),
+          role: "assistant",
+          content: "❌ Error saving meal. Please try again.",
+          timestamp: new Date().toISOString(),
+        }]);
+      } else {
+        // Refresh saved meals list
+        loadSavedMeals();
+        
+        setMessages(prev => [...prev, {
+          id: Date.now().toString(),
+          role: "assistant",
+          content: `✅ Saved **"${mealName}"**!\n\n📊 ${data.total_calories} cal • ${data.total_protein}g protein\n📝 ${summary}\n\nType **@${normalizedName}** anytime to log this meal!`,
+          timestamp: new Date().toISOString(),
+        }]);
+        showToast(`Saved meal: ${mealName}`, "food");
+      }
+    } catch (error) {
+      console.error("Error creating meal:", error);
+      setMessages(prev => [...prev, {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: "❌ Error creating meal. Please try again.",
+        timestamp: new Date().toISOString(),
+      }]);
+    }
+
+    setLoading(false);
+    return true;
+  };
+
+  // Save logged items as a meal (called after user provides name)
+  const savePendingMeal = async (mealName: string) => {
+    if (!pendingSaveMeal) return;
+
+    const normalizedName = mealName.toLowerCase().replace(/\s+/g, "-");
+    const itemNames = pendingSaveMeal.items.slice(0, 3).map(i => i.description);
+    const summary = itemNames.join(", ") + (pendingSaveMeal.items.length > 3 ? "..." : "");
+
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { error } = await supabase.from("saved_meals").upsert({
+      user_id: user.id,
+      name: normalizedName,
+      display_name: mealName.replace(/\b\w/g, c => c.toUpperCase()),
+      description: pendingSaveMeal.items.map(i => i.description).join(", "),
+      summary: summary,
+      total_calories: pendingSaveMeal.totalCal,
+      total_protein: pendingSaveMeal.totalProtein,
+      items: pendingSaveMeal.items,
+      updated_at: new Date().toISOString(),
+    }, {
+      onConflict: "user_id,name",
+    });
+
+    if (!error) {
+      loadSavedMeals();
+      setMessages(prev => [...prev, {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: `✅ Saved as **"${mealName}"**! Type **@${normalizedName}** to use it.`,
+        timestamp: new Date().toISOString(),
+      }]);
+      showToast(`Saved: ${mealName}`, "food");
+    }
+    setPendingSaveMeal(null);
+  };
   
   // Check for trial upgrade reminder (2 days or less before expiry)
   useEffect(() => {
@@ -1084,11 +1316,41 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
       return;
     }
 
+    const trimmedInput = input.trim();
+    
+    // Check for /create command
+    if (trimmedInput.startsWith("/create ")) {
+      const userMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: "user",
+        content: trimmedInput,
+        timestamp: new Date().toISOString(),
+      };
+      setMessages(prev => [...prev, userMessage]);
+      setInput("");
+      await handleCreateMealCommand(trimmedInput);
+      return;
+    }
+
+    // Check if user is responding to save meal prompt
+    if (pendingSaveMeal && !trimmedInput.includes(" ") && trimmedInput.length > 0) {
+      const userMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: "user",
+        content: trimmedInput,
+        timestamp: new Date().toISOString(),
+      };
+      setMessages(prev => [...prev, userMessage]);
+      setInput("");
+      await savePendingMeal(trimmedInput);
+      return;
+    }
+
     const now = new Date().toISOString();
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       role: "user",
-      content: input,
+      content: trimmedInput,
       timestamp: now,
     };
 
@@ -1765,6 +2027,37 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
             }, 1500); // 1.5 second delay
           }
         }
+
+        // SAVE MEAL SUGGESTION: After logging food with 2+ items, offer to save as a quick meal
+        const foodItems = parsedData.items as Array<{ description: string; calories: number; protein: number; emoji?: string }>;
+        if (foodItems.length >= 2) {
+          const totalCal = foodItems.reduce((sum, i) => sum + i.calories, 0);
+          const totalProtein = foodItems.reduce((sum, i) => sum + i.protein, 0);
+          
+          setTimeout(() => {
+            setPendingSaveMeal({
+              items: foodItems.map(i => ({
+                description: i.description,
+                calories: i.calories,
+                protein: i.protein,
+                emoji: i.emoji || "🍽️",
+              })),
+              totalCal,
+              totalProtein,
+            });
+            
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: "save-meal-prompt-" + Date.now(),
+                role: "assistant",
+                content: `💾 **Save as a quick meal?**\n\nReply with a name (e.g., "breakfast" or "post-workout") to save this combo.\nThen type **@name** anytime to log it instantly!\n\n*Or just ignore this to continue.*`,
+                confirmed: true,
+                timestamp: new Date().toISOString(),
+              },
+            ]);
+          }, 2500); // After coaching message
+        }
       }
 
       // Trigger dashboard refresh WITHOUT page reload
@@ -2010,19 +2303,81 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
             </div>
           </Link>
         )}
+        
+        {/* @ Mention Dropdown */}
+        {showMealDropdown && (
+          <div className="mb-2 bg-secondary rounded-lg border border-border shadow-lg max-h-48 overflow-y-auto">
+            {filteredMeals.length === 0 ? (
+              <div className="p-3 text-sm text-muted-foreground">
+                {savedMeals.length === 0 ? (
+                  <span>No saved meals yet. Use <code className="bg-background px-1 rounded">/create name description</code> to save one!</span>
+                ) : (
+                  <span>No meals match "{mealFilter}"</span>
+                )}
+              </div>
+            ) : (
+              filteredMeals.map((meal, index) => (
+                <button
+                  key={meal.id}
+                  type="button"
+                  onClick={() => insertMeal(meal)}
+                  className={`w-full text-left p-3 hover:bg-background/50 transition-colors border-b border-border last:border-0 ${
+                    index === selectedMealIndex ? "bg-background/50" : ""
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <span className="font-medium text-sm text-primary">@{meal.name}</span>
+                      <span className="text-muted-foreground text-xs ml-2 truncate">{meal.summary}</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                      {meal.total_calories} cal
+                    </span>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        )}
+        
+        {/* Pending save meal indicator */}
+        {pendingSaveMeal && (
+          <div className="mb-2 bg-primary/10 border border-primary/30 rounded-lg px-3 py-2 flex items-center justify-between">
+            <span className="text-xs text-primary">💾 Reply with a name to save this meal</span>
+            <button
+              type="button"
+              onClick={() => setPendingSaveMeal(null)}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+        
         <form onSubmit={handleSubmit} className="flex gap-2 items-end">
           <textarea
+            ref={inputRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => handleInputChange(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
+              // Handle meal dropdown navigation
+              handleKeyDown(e);
+              
+              // Submit on Enter (if dropdown not showing)
+              if (e.key === "Enter" && !e.shiftKey && !showMealDropdown) {
                 e.preventDefault();
                 if (input.trim() && !loading) {
                   handleSubmit(e);
                 }
               }
             }}
-            placeholder={trialInfo.isExpired && !trialInfo.isPaid ? "Upgrade to continue..." : "What did you eat or do?"}
+            placeholder={
+              trialInfo.isExpired && !trialInfo.isPaid 
+                ? "Upgrade to continue..." 
+                : pendingSaveMeal 
+                  ? "Enter a name (e.g., breakfast)..." 
+                  : "What did you eat? Try @meal or /create name..."
+            }
             rows={1}
             className={`flex-1 min-h-10 max-h-32 px-4 py-2.5 text-sm bg-secondary border-0 rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none ${
               trialInfo.isExpired && !trialInfo.isPaid ? "opacity-60" : ""
@@ -2046,7 +2401,7 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
           </Button>
         </form>
         <p className="text-[10px] text-muted-foreground mt-1.5 text-center">
-          Press Enter to send • Shift+Enter for new line
+          Type <span className="text-primary">@</span> for saved meals • <span className="text-primary">/create</span> to save new
         </p>
       </div>
     </div>

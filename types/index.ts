@@ -47,6 +47,24 @@ export interface ProfileInsert {
 }
 
 // ============================================================================
+// SAVED MEALS
+// ============================================================================
+
+export interface SavedMeal {
+  id: string;
+  user_id: string;
+  name: string; // slug like "can-sushi"
+  display_name: string; // Pretty name like "Can Sushi"
+  description: string; // Full description
+  summary: string; // Short AI summary
+  total_calories: number;
+  total_protein: number;
+  items: Array<{ description: string; calories: number; protein: number; emoji: string }>;
+  created_at: string;
+  updated_at: string;
+}
+
+// ============================================================================
 // DAILY LOGS
 // ============================================================================
 
