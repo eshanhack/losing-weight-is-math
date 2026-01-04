@@ -150,25 +150,40 @@ export async function POST(request: Request) {
 function getMockResponse(message: string): AIParseResponse {
   const lowerMessage = message.toLowerCase();
 
-  // Detect if this is an edit/update request
-  const isEdit =
-    lowerMessage.includes("update") ||
-    lowerMessage.includes("change") ||
-    lowerMessage.includes("correct") ||
-    lowerMessage.includes("actually") ||
-    lowerMessage.includes("edit") ||
-    (lowerMessage.includes("had") && lowerMessage.includes("not"));
+  // Detect if this is an edit/update request - more comprehensive detection
+  const editPatterns = [
+    /update/i,
+    /change/i,
+    /correct/i,
+    /actually/i,
+    /edit/i,
+    /modify/i,
+    /fix/i,
+    /adjust/i,
+    /should\s+(?:be|have)/i,
+    /was\s+(?:actually|really)/i,
+    /had\s+\d+g/i,  // "had 17g"
+    /not\s+\d+/i,   // "not 40g"
+    /instead\s+of/i,
+    /wrong/i,
+    /mistake/i,
+  ];
+  
+  const isEdit = editPatterns.some(pattern => pattern.test(lowerMessage));
 
   // Detect if this is a delete request
   const isDelete =
     lowerMessage.includes("delete") ||
-    lowerMessage.includes("remove");
+    lowerMessage.includes("remove") ||
+    lowerMessage.includes("undo") ||
+    lowerMessage.includes("cancel");
 
   if (isDelete) {
     // Try to find what they want to delete
     const words = lowerMessage.split(" ");
-    const deleteIdx = words.findIndex(w => w === "delete" || w === "remove");
-    const searchTerm = words.slice(deleteIdx + 1).join(" ").replace(/^the\s+/, "").split(" ")[0] || "item";
+    const deleteIdx = words.findIndex(w => ["delete", "remove", "undo", "cancel"].includes(w));
+    const afterDelete = words.slice(deleteIdx + 1).join(" ").replace(/^the\s+/, "");
+    const searchTerm = afterDelete.split(/\s+/)[0] || "item";
     
     return {
       type: "delete",
@@ -182,26 +197,51 @@ function getMockResponse(message: string): AIParseResponse {
 
   if (isEdit) {
     // Try to extract the protein or calorie value and what to search for
-    const proteinMatch = lowerMessage.match(/(\d+)\s*g(?:rams?)?\s*(?:of\s+)?protein/);
-    const calorieMatch = lowerMessage.match(/(\d+)\s*(?:cal(?:ories)?|kcal)/);
+    const proteinMatch = lowerMessage.match(/(\d+)\s*g(?:rams?)?\s*(?:of\s+)?(?:protein)?/i) ||
+                         lowerMessage.match(/protein[:\s]+(\d+)/i) ||
+                         lowerMessage.match(/had\s+(\d+)\s*g/i);
+    const calorieMatch = lowerMessage.match(/(\d+)\s*(?:cal(?:ories)?|kcal)/i);
     
-    // Find the food item being referenced
-    const foodKeywords = ["tuna", "egg", "chicken", "rice", "bread", "toast", "milk", "coffee", "lunch", "dinner", "breakfast"];
-    const searchTerm = foodKeywords.find(food => lowerMessage.includes(food)) || "item";
+    // Find the food item being referenced - expanded list
+    const foodKeywords = [
+      "tuna", "egg", "eggs", "chicken", "rice", "bread", "toast", "milk", "coffee",
+      "lunch", "dinner", "breakfast", "snack", "meal", "pizza", "burger", "salad",
+      "sandwich", "fruit", "apple", "banana", "yogurt", "oatmeal", "pasta", "fish",
+      "steak", "beef", "pork", "salmon", "shrimp", "avocado", "cheese", "protein"
+    ];
+    let searchTerm = foodKeywords.find(food => lowerMessage.includes(food)) || "";
+    
+    // If no food keyword found, try to extract from context
+    if (!searchTerm) {
+      // Look for patterns like "the X I had" or "my X"
+      const contextMatch = lowerMessage.match(/(?:the|my)\s+(\w+)\s+(?:i\s+)?(?:had|ate|logged|entered)/i);
+      if (contextMatch) {
+        searchTerm = contextMatch[1];
+      } else {
+        searchTerm = "item";
+      }
+    }
     
     const updates: { calories?: number; protein?: number } = {};
     if (proteinMatch) updates.protein = parseInt(proteinMatch[1]);
     if (calorieMatch) updates.calories = parseInt(calorieMatch[1]);
     
-    return {
-      type: "edit",
-      search_term: searchTerm,
-      updates,
-      items: [],
-      total_calories: 0,
-      total_protein: 0,
-      message: `📝 I'll update your ${searchTerm} entries${updates.protein ? ` to ${updates.protein}g protein` : ""}${updates.calories ? ` to ${updates.calories} calories` : ""}.`,
-    };
+    // If we found updates, return edit response
+    if (Object.keys(updates).length > 0) {
+      const updateParts = [];
+      if (updates.protein !== undefined) updateParts.push(`${updates.protein}g protein`);
+      if (updates.calories !== undefined) updateParts.push(`${updates.calories} calories`);
+      
+      return {
+        type: "edit",
+        search_term: searchTerm,
+        updates,
+        items: [],
+        total_calories: 0,
+        total_protein: 0,
+        message: `📝 I'll update your ${searchTerm} entries to ${updateParts.join(" and ")}.`,
+      };
+    }
   }
 
   // Detect if exercise or food

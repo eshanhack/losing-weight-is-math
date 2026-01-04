@@ -1132,6 +1132,8 @@ function DashboardContent() {
   const [dayEntries, setDayEntries] = useState<DayEntry[]>([]);
   const [loadingEntries, setLoadingEntries] = useState(false);
   const [showWelcome, setShowWelcome] = useState(isWelcome);
+  const [editingEntry, setEditingEntry] = useState<DayEntry | null>(null);
+  const [editForm, setEditForm] = useState({ description: "", calories: 0, protein: 0 });
 
   const [stats, setStats] = useState({
     todayBalance: 0,
@@ -1371,6 +1373,134 @@ function DashboardContent() {
     }
   };
 
+  // Manual entry editing
+  const startEditEntry = (entry: DayEntry) => {
+    setEditingEntry(entry);
+    setEditForm({
+      description: entry.description,
+      calories: entry.calories,
+      protein: entry.protein_grams,
+    });
+  };
+
+  const cancelEditEntry = () => {
+    setEditingEntry(null);
+    setEditForm({ description: "", calories: 0, protein: 0 });
+  };
+
+  const saveEditEntry = async () => {
+    if (!editingEntry || !selectedDay) return;
+
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // Update the entry
+    const { error } = await supabase
+      .from("log_entries")
+      .update({
+        description: editForm.description,
+        calories: editForm.calories,
+        protein_grams: editForm.protein,
+      })
+      .eq("id", editingEntry.id);
+
+    if (error) {
+      console.error("Error updating entry:", error);
+      return;
+    }
+
+    // Get the daily log for this entry to recalculate totals
+    const { data: log } = await supabase
+      .from("daily_logs")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("log_date", selectedDay.date)
+      .single();
+
+    if (log) {
+      // Recalculate totals
+      const { data: allEntries } = await supabase
+        .from("log_entries")
+        .select("*")
+        .eq("daily_log_id", log.id);
+
+      if (allEntries) {
+        const foodEntries = allEntries.filter((e) => e.entry_type === "food");
+        const exerciseEntries = allEntries.filter((e) => e.entry_type === "exercise");
+
+        await supabase
+          .from("daily_logs")
+          .update({
+            caloric_intake: foodEntries.reduce((sum, e) => sum + (e.calories || 0), 0),
+            caloric_outtake: exerciseEntries.reduce((sum, e) => sum + (e.calories || 0), 0),
+            protein_grams: foodEntries.reduce((sum, e) => sum + (e.protein_grams || 0), 0),
+          })
+          .eq("id", log.id);
+      }
+    }
+
+    // Update local state
+    setDayEntries(prev => prev.map(e => 
+      e.id === editingEntry.id 
+        ? { ...e, description: editForm.description, calories: editForm.calories, protein_grams: editForm.protein }
+        : e
+    ));
+    
+    cancelEditEntry();
+    fetchData(); // Refresh dashboard
+  };
+
+  const deleteEntry = async (entryId: string) => {
+    if (!selectedDay) return;
+
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // Delete the entry
+    const { error } = await supabase
+      .from("log_entries")
+      .delete()
+      .eq("id", entryId);
+
+    if (error) {
+      console.error("Error deleting entry:", error);
+      return;
+    }
+
+    // Get the daily log to recalculate totals
+    const { data: log } = await supabase
+      .from("daily_logs")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("log_date", selectedDay.date)
+      .single();
+
+    if (log) {
+      const { data: allEntries } = await supabase
+        .from("log_entries")
+        .select("*")
+        .eq("daily_log_id", log.id);
+
+      const foodEntries = (allEntries || []).filter((e) => e.entry_type === "food");
+      const exerciseEntries = (allEntries || []).filter((e) => e.entry_type === "exercise");
+
+      await supabase
+        .from("daily_logs")
+        .update({
+          caloric_intake: foodEntries.reduce((sum, e) => sum + (e.calories || 0), 0),
+          caloric_outtake: exerciseEntries.reduce((sum, e) => sum + (e.calories || 0), 0),
+          protein_grams: foodEntries.reduce((sum, e) => sum + (e.protein_grams || 0), 0),
+        })
+        .eq("id", log.id);
+    }
+
+    // Update local state
+    setDayEntries(prev => prev.filter(e => e.id !== entryId));
+    fetchData(); // Refresh dashboard
+  };
+
   const saveWeight = async (date: string, weight: number) => {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -1450,7 +1580,7 @@ function DashboardContent() {
       </div>
 
       {/* Day Detail Modal */}
-      <Dialog open={!!selectedDay} onOpenChange={() => { setSelectedDay(null); setDayEntries([]); }}>
+      <Dialog open={!!selectedDay} onOpenChange={() => { setSelectedDay(null); setDayEntries([]); setEditingEntry(null); }}>
         <DialogContent className="bg-card border-border max-w-lg max-h-[85vh] overflow-hidden flex flex-col">
           <DialogHeader className="shrink-0">
             <DialogTitle className="font-display flex items-center gap-2">
@@ -1480,26 +1610,106 @@ function DashboardContent() {
               </div>
             )}
 
+            {/* Edit Entry Form */}
+            {editingEntry && (
+              <div className="p-4 bg-primary/10 border border-primary/20 rounded-lg space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-display font-semibold text-foreground">✏️ Edit Entry</h4>
+                  <Button size="sm" variant="ghost" onClick={cancelEditEntry} className="h-6 w-6 p-0">
+                    ✕
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Description</Label>
+                    <Input
+                      value={editForm.description}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, description: e.target.value }))}
+                      className="bg-background h-9"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Calories</Label>
+                      <Input
+                        type="number"
+                        value={editForm.calories}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, calories: parseInt(e.target.value) || 0 }))}
+                        className="bg-background h-9"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Protein (g)</Label>
+                      <Input
+                        type="number"
+                        value={editForm.protein}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, protein: parseInt(e.target.value) || 0 }))}
+                        className="bg-background h-9"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={saveEditEntry} size="sm" className="flex-1 bg-primary hover:bg-primary/90">
+                    Save Changes
+                  </Button>
+                  <Button onClick={cancelEditEntry} size="sm" variant="outline" className="flex-1">
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {/* Food Entries */}
             <div className="space-y-2">
               <h4 className="font-display font-semibold text-foreground flex items-center gap-2">
                 <span className="text-lg">🍽️</span> Food
+                <span className="text-xs text-muted-foreground font-normal">(tap to edit)</span>
               </h4>
               {loadingEntries ? (
                 <div className="text-sm text-muted-foreground animate-pulse">Loading entries...</div>
               ) : dayEntries.filter(e => e.entry_type === "food").length > 0 ? (
                 <div className="space-y-2">
                   {dayEntries.filter(e => e.entry_type === "food").map((entry) => (
-                    <div key={entry.id} className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-foreground truncate">{entry.description}</p>
-                        <p className="text-[10px] text-muted-foreground">{formatTime(entry.created_at)}</p>
-                      </div>
-                      <div className="text-right shrink-0 ml-3">
-                        <p className="text-sm font-medium text-foreground">{entry.calories} cal</p>
-                        {entry.protein_grams > 0 && (
-                          <p className="text-[10px] text-muted-foreground">{entry.protein_grams}g protein</p>
-                        )}
+                    <div 
+                      key={entry.id} 
+                      className={`p-3 bg-secondary/50 rounded-lg transition-all ${
+                        editingEntry?.id === entry.id ? "ring-2 ring-primary" : "hover:bg-secondary/70 cursor-pointer"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 min-w-0" onClick={() => startEditEntry(entry)}>
+                          <p className="text-sm text-foreground truncate">{entry.description}</p>
+                          <p className="text-[10px] text-muted-foreground">{formatTime(entry.created_at)}</p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0 ml-3">
+                          <div className="text-right" onClick={() => startEditEntry(entry)}>
+                            <p className="text-sm font-medium text-foreground">{entry.calories} cal</p>
+                            {entry.protein_grams > 0 && (
+                              <p className="text-[10px] text-muted-foreground">{entry.protein_grams}g protein</p>
+                            )}
+                          </div>
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => startEditEntry(entry)}
+                              className="p-1.5 rounded hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors"
+                              title="Edit"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={() => deleteEntry(entry.id)}
+                              className="p-1.5 rounded hover:bg-danger/20 text-muted-foreground hover:text-danger transition-colors"
+                              title="Delete"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -1517,19 +1727,49 @@ function DashboardContent() {
             <div className="space-y-2">
               <h4 className="font-display font-semibold text-foreground flex items-center gap-2">
                 <span className="text-lg">🏃</span> Exercise
+                <span className="text-xs text-muted-foreground font-normal">(tap to edit)</span>
               </h4>
               {loadingEntries ? (
                 <div className="text-sm text-muted-foreground animate-pulse">Loading entries...</div>
               ) : dayEntries.filter(e => e.entry_type === "exercise").length > 0 ? (
                 <div className="space-y-2">
                   {dayEntries.filter(e => e.entry_type === "exercise").map((entry) => (
-                    <div key={entry.id} className="flex items-center justify-between p-3 bg-success/5 rounded-lg border border-success/10">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-foreground truncate">{entry.description}</p>
-                        <p className="text-[10px] text-muted-foreground">{formatTime(entry.created_at)}</p>
-                      </div>
-                      <div className="text-right shrink-0 ml-3">
-                        <p className="text-sm font-medium text-success">-{entry.calories} cal</p>
+                    <div 
+                      key={entry.id} 
+                      className={`p-3 bg-success/5 rounded-lg border border-success/10 transition-all ${
+                        editingEntry?.id === entry.id ? "ring-2 ring-primary" : "hover:bg-success/10 cursor-pointer"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 min-w-0" onClick={() => startEditEntry(entry)}>
+                          <p className="text-sm text-foreground truncate">{entry.description}</p>
+                          <p className="text-[10px] text-muted-foreground">{formatTime(entry.created_at)}</p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0 ml-3">
+                          <div className="text-right" onClick={() => startEditEntry(entry)}>
+                            <p className="text-sm font-medium text-success">-{entry.calories} cal</p>
+                          </div>
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => startEditEntry(entry)}
+                              className="p-1.5 rounded hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors"
+                              title="Edit"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={() => deleteEntry(entry.id)}
+                              className="p-1.5 rounded hover:bg-danger/20 text-muted-foreground hover:text-danger transition-colors"
+                              title="Delete"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   ))}
