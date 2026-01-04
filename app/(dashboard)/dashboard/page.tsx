@@ -225,33 +225,43 @@ function DashboardStats({
                 {/* To Goal indicator */}
                 {formattedBalance.toGoal > 0 ? (
                   // Behind goal: need to burn more
-                  <div className="flex items-center gap-1.5 text-xs">
-                    <span className="text-muted-foreground">🔥</span>
-                    <span className="text-success font-medium">{formattedBalance.toGoal.toLocaleString()}</span>
-                    <span className="text-muted-foreground">to goal</span>
+                  <div className="flex items-center gap-1 text-xs">
+                    <span className="text-muted-foreground">Burn</span>
+                    <span className="text-success font-semibold">{formattedBalance.toGoal.toLocaleString()}</span>
+                    <span className="text-muted-foreground">for goal</span>
+                  </div>
+                ) : formattedBalance.toGoal === 0 ? (
+                  // Exactly at goal
+                  <div className="flex items-center gap-1 text-xs">
+                    <span className="text-success font-semibold">✓ At goal!</span>
                   </div>
                 ) : (
                   // Exceeded goal: can eat more
-                  <div className="flex items-center gap-1.5 text-xs">
-                    <span className="text-muted-foreground">🍽️</span>
-                    <span className="text-danger font-medium">{Math.abs(formattedBalance.toGoal).toLocaleString()}</span>
-                    <span className="text-muted-foreground">to goal</span>
+                  <div className="flex items-center gap-1 text-xs">
+                    <span className="text-muted-foreground">Can eat</span>
+                    <span className="text-success font-semibold">{Math.abs(formattedBalance.toGoal).toLocaleString()}</span>
+                    <span className="text-muted-foreground">more</span>
                   </div>
                 )}
                 {/* To Maintenance indicator */}
-                {stats.todayBalance >= 0 ? (
+                {stats.todayBalance > 0 ? (
                   // In surplus: need to burn to get back
-                  <div className="flex items-center gap-1.5 text-[10px]">
-                    <span className="text-muted-foreground">🏃</span>
-                    <span className="text-success font-medium">{stats.todayBalance.toLocaleString()}</span>
-                    <span className="text-muted-foreground">to maint.</span>
+                  <div className="flex items-center gap-1 text-[10px]">
+                    <span className="text-muted-foreground/70">Burn</span>
+                    <span className="text-gold font-medium">{stats.todayBalance.toLocaleString()}</span>
+                    <span className="text-muted-foreground/70">for maint.</span>
+                  </div>
+                ) : stats.todayBalance === 0 ? (
+                  // At maintenance exactly
+                  <div className="flex items-center gap-1 text-[10px]">
+                    <span className="text-muted-foreground/70">At maintenance</span>
                   </div>
                 ) : (
                   // In deficit: can eat more before maintenance
-                  <div className="flex items-center gap-1.5 text-[10px]">
-                    <span className="text-muted-foreground">🍴</span>
-                    <span className="text-danger font-medium">{Math.abs(stats.todayBalance).toLocaleString()}</span>
-                    <span className="text-muted-foreground">to maint.</span>
+                  <div className="flex items-center gap-1 text-[10px]">
+                    <span className="text-muted-foreground/70">Can eat</span>
+                    <span className="text-muted-foreground font-medium">{Math.abs(stats.todayBalance).toLocaleString()}</span>
+                    <span className="text-muted-foreground/70">before maint.</span>
                   </div>
                 )}
               </div>
