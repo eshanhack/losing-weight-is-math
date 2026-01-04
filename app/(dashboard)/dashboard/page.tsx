@@ -134,24 +134,6 @@ function ProgressBar({ value, max, showGradient = false }: { value: number; max:
   );
 }
 
-// Segmented progress bar (like FitFuel)
-function SegmentedProgress({ segments = 20, filledSegments = 0, color = "primary" }: { segments?: number; filledSegments?: number; color?: string }) {
-  const colorClass = color === "success" ? "bg-success" : color === "danger" ? "bg-danger" : color === "gold" ? "bg-gold" : "bg-primary";
-  
-  return (
-    <div className="flex gap-0.5">
-      {Array.from({ length: segments }).map((_, i) => (
-        <div
-          key={i}
-          className={`h-1 flex-1 rounded-sm transition-colors ${
-            i < filledSegments ? colorClass : "bg-secondary"
-          }`}
-        />
-      ))}
-    </div>
-  );
-}
-
 function DashboardStats({ 
   stats, 
   calendar, 
@@ -253,12 +235,7 @@ function DashboardStats({
               </span>
               <span className="text-sm text-muted-foreground">kcal</span>
             </div>
-            <SegmentedProgress 
-              segments={20} 
-              filledSegments={Math.min(20, Math.max(0, Math.round(budgetProgress / 5)))} 
-              color={formattedBalance.color === "success" ? "success" : formattedBalance.color === "warning" ? "gold" : formattedBalance.color === "danger" ? "danger" : "primary"}
-            />
-            <div className="mt-3 space-y-1 text-xs text-muted-foreground">
+            <div className="mt-2 space-y-1 text-xs text-muted-foreground">
               <div className="flex justify-between">
                 <span>Eaten</span>
                 <span>{stats.todayIntake.toLocaleString()} kcal</span>
@@ -301,12 +278,7 @@ function DashboardStats({
               </span>
               <span className="text-sm text-muted-foreground">kcal</span>
             </div>
-            <SegmentedProgress 
-              segments={20} 
-              filledSegments={14} 
-              color={formattedSevenDay.isDeficit ? "success" : "danger"}
-            />
-            <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+            <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
               <span>Daily avg:</span>
               <span className={formattedSevenDay.isDeficit ? "text-success" : "text-danger"}>
                 {stats.sevenDayAverage < 0 ? "" : "+"}{stats.sevenDayAverage}/day
@@ -339,8 +311,7 @@ function DashboardStats({
               </span>
               <span className="text-sm text-muted-foreground">kg</span>
             </div>
-            <SegmentedProgress segments={20} filledSegments={16} color="primary" />
-            <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+            <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
               <span>7-day average</span>
               {profile?.goal_weight_kg && (
                 <>
@@ -376,8 +347,7 @@ function DashboardStats({
               </span>
               <span className="text-sm text-muted-foreground">days</span>
             </div>
-            <SegmentedProgress segments={20} filledSegments={Math.min(20, stats.streak * 2)} color="gold" />
-            <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+            <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
               <span>Keep it going!</span>
               <span>•</span>
               <span className="text-gold">Best: {stats.streak} days</span>
