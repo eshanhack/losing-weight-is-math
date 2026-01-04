@@ -21,6 +21,8 @@ import {
   calculateStreak,
   calculateProteinGoal,
   formatBalance,
+  formatBalanceWithGoal,
+  calculateRequiredDailyDeficit,
 } from "@/lib/math";
 import type { Profile, DailyLog, Subscription, AIParseResponse, LogEntry } from "@/types";
 
@@ -143,6 +145,7 @@ function DashboardStats({
     todayProtein: number;
     proteinGoal: number;
     maintenanceCalories: number;
+    goalDeficit: number;
     sevenDayBalance: number;
     sevenDayAverage: number;
     realWeight: number | null;
@@ -156,11 +159,15 @@ function DashboardStats({
   logs: DailyLog[];
   onDayClick: (day: CalendarDay) => void;
 }) {
-  const formattedBalance = formatBalance(stats.todayBalance);
+  // Format balance with goal comparison
+  const formattedBalance = formatBalanceWithGoal(stats.todayBalance, stats.goalDeficit);
   const formattedSevenDay = formatBalance(stats.sevenDayBalance);
   
-  // Calculate progress percentages
-  const calorieProgress = stats.maintenanceCalories > 0 ? Math.round((stats.todayIntake / stats.maintenanceCalories) * 100) : 0;
+  // Calculate progress: how much of your "calorie budget" have you used?
+  // Budget = Maintenance - Goal deficit (e.g., 2000 - 1000 = 1000 cal budget)
+  const caloriesBudget = stats.maintenanceCalories + stats.goalDeficit; // goalDeficit is negative, so this subtracts
+  const caloriesUsed = stats.todayIntake - stats.todayOuttake; // Net intake after exercise
+  const budgetProgress = caloriesBudget > 0 ? Math.round((caloriesUsed / caloriesBudget) * 100) : 0;
   const proteinProgress = stats.proteinGoal > 0 ? Math.round((stats.todayProtein / stats.proteinGoal) * 100) : 0;
 
   return (
@@ -189,21 +196,33 @@ function DashboardStats({
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
         >
-          <Card className="p-4 lg:p-5 bg-card border-border h-full card-hover">
+          <Card className={`p-4 lg:p-5 bg-card border-border h-full card-hover ${
+            formattedBalance.color === "success" ? "border-success/30" : 
+            formattedBalance.color === "warning" ? "border-gold/30" : 
+            formattedBalance.color === "danger" ? "border-danger/30" : ""
+          }`}>
             <div className="flex items-start justify-between mb-3">
-              <div className={`icon-container ${formattedBalance.isDeficit ? "bg-success/10" : stats.todayBalance > 0 ? "bg-danger/10" : "bg-primary/10"}`}>
+              <div className={`icon-container ${
+                formattedBalance.color === "success" ? "bg-success/10" : 
+                formattedBalance.color === "warning" ? "bg-gold/10" : 
+                formattedBalance.color === "danger" ? "bg-danger/10" : "bg-primary/10"
+              }`}>
                 <span className="text-lg">📊</span>
               </div>
-              <button className="text-muted-foreground hover:text-foreground">
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M6 10a2 2 0 11-4 0 2 2 0 014 0zM12 10a2 2 0 11-4 0 2 2 0 014 0zM16 12a2 2 0 100-4 2 2 0 000 4z" />
-                </svg>
-              </button>
+              <span className={`pill ${
+                formattedBalance.color === "success" ? "pill-success" : 
+                formattedBalance.color === "warning" ? "pill-warning" : 
+                formattedBalance.color === "danger" ? "pill-danger" : "pill-muted"
+              }`}>
+                {formattedBalance.vsGoalText}
+              </span>
             </div>
             <h3 className="font-display font-semibold text-foreground mb-1">Today's Balance</h3>
             <div className="flex items-baseline gap-2 mb-3">
               <span className={`font-display text-2xl lg:text-3xl font-bold ${
-                formattedBalance.color === "success" ? "text-success" : formattedBalance.color === "danger" ? "text-danger" : "text-foreground"
+                formattedBalance.color === "success" ? "text-success" : 
+                formattedBalance.color === "warning" ? "text-gold" : 
+                formattedBalance.color === "danger" ? "text-danger" : "text-foreground"
               }`}>
                 {formattedBalance.text}
               </span>
@@ -211,13 +230,22 @@ function DashboardStats({
             </div>
             <SegmentedProgress 
               segments={20} 
-              filledSegments={Math.min(20, Math.round(calorieProgress / 5))} 
-              color={formattedBalance.isDeficit ? "success" : stats.todayBalance > 0 ? "danger" : "primary"}
+              filledSegments={Math.min(20, Math.max(0, Math.round(budgetProgress / 5)))} 
+              color={formattedBalance.color === "success" ? "success" : formattedBalance.color === "warning" ? "gold" : formattedBalance.color === "danger" ? "danger" : "primary"}
             />
-            <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-              <span>{calorieProgress}% of goal</span>
-              <span>•</span>
-              <span>{stats.todayIntake} in / {stats.todayOuttake} out</span>
+            <div className="mt-3 space-y-1 text-xs text-muted-foreground">
+              <div className="flex justify-between">
+                <span>Eaten</span>
+                <span>{stats.todayIntake.toLocaleString()} kcal</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Burned</span>
+                <span className="text-success">+{stats.todayOuttake.toLocaleString()} kcal</span>
+              </div>
+              <div className="flex justify-between pt-1 border-t border-border">
+                <span>Goal</span>
+                <span>{stats.goalDeficit.toLocaleString()} kcal</span>
+              </div>
             </div>
           </Card>
         </motion.div>
@@ -768,6 +796,7 @@ function ResizableSplitView({
     todayProtein: number;
     proteinGoal: number;
     maintenanceCalories: number;
+    goalDeficit: number;
     sevenDayBalance: number;
     sevenDayAverage: number;
     realWeight: number | null;
@@ -847,6 +876,7 @@ function DashboardContent() {
     todayProtein: 0,
     proteinGoal: 0,
     maintenanceCalories: 0,
+    goalDeficit: -500, // Default goal deficit
     sevenDayBalance: 0,
     sevenDayAverage: 0,
     realWeight: null as number | null,
@@ -890,17 +920,29 @@ function DashboardContent() {
     const todayLog = logs.find((l) => l.log_date === today);
 
     const age = calculateAge(new Date(profile.date_of_birth));
+    const currentWeight = profile.current_weight_kg || profile.starting_weight_kg;
     const bmr = calculateBMR(
-      profile.current_weight_kg || profile.starting_weight_kg,
+      currentWeight,
       profile.height_cm,
       age,
       profile.gender
     );
     const tdee = calculateTDEE(bmr, profile.activity_level);
 
-    const todayBalance = todayLog
-      ? calculateDailyBalance(tdee, todayLog.caloric_intake, todayLog.caloric_outtake)
-      : 0;
+    // Calculate goal deficit from profile's goal weight and date
+    const goalAnalysis = calculateRequiredDailyDeficit(
+      currentWeight,
+      profile.goal_weight_kg,
+      new Date(profile.goal_date)
+    );
+    // Goal deficit is negative (e.g., -1000 means 1000 calorie deficit goal)
+    const goalDeficit = -goalAnalysis.dailyDeficit;
+
+    // Today's balance: Intake - (TDEE + Exercise)
+    // If nothing logged, balance = 0 - TDEE = -TDEE (full deficit potential)
+    const todayIntake = todayLog?.caloric_intake || 0;
+    const todayOuttake = todayLog?.caloric_outtake || 0;
+    const todayBalance = calculateDailyBalance(tdee, todayIntake, todayOuttake);
 
     const last7Days = logs.slice(0, 7).map((l) => ({
       date: new Date(l.log_date),
@@ -922,17 +964,18 @@ function DashboardContent() {
     const streak = calculateStreak(last7Days);
 
     const proteinGoal = calculateProteinGoal(
-      profile.current_weight_kg || profile.starting_weight_kg,
+      currentWeight,
       profile.activity_level !== "sedentary"
     );
 
     setStats({
       todayBalance,
-      todayIntake: todayLog?.caloric_intake || 0,
-      todayOuttake: todayLog?.caloric_outtake || 0,
+      todayIntake,
+      todayOuttake,
       todayProtein: todayLog?.protein_grams || 0,
       proteinGoal,
       maintenanceCalories: tdee,
+      goalDeficit,
       sevenDayBalance: sevenDay.total,
       sevenDayAverage: sevenDay.average,
       realWeight,
@@ -942,10 +985,10 @@ function DashboardContent() {
       streak,
     });
 
-    buildCalendar(logs, sub, tdee);
+    buildCalendar(logs, sub, tdee, goalDeficit);
   };
 
-  const buildCalendar = (logs: DailyLog[], sub: Subscription | null, tdee: number) => {
+  const buildCalendar = (logs: DailyLog[], sub: Subscription | null, tdee: number, goalDeficit: number) => {
     const today = new Date();
     const currentMonth = today.getMonth();
     const currentYear = today.getFullYear();
@@ -973,13 +1016,15 @@ function DashboardContent() {
         isLocked = true;
       }
       const balance = log ? calculateDailyBalance(tdee, log.caloric_intake, log.caloric_outtake) : 0;
+      // Success = met or exceeded goal deficit (balance <= goalDeficit)
+      const isSuccess = log ? balance <= goalDeficit : false;
 
       calendarDays.push({
         date: dateStr,
         dayOfMonth: day,
         weight: log?.weight_kg || null,
         balance,
-        isSuccess: balance < 0,
+        isSuccess,
         isLocked,
         isFuture,
         isToday,

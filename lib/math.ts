@@ -459,6 +459,58 @@ export function formatBalance(balance: number): {
 }
 
 /**
+ * Format balance with comparison to goal deficit
+ * Returns color based on performance vs goal:
+ * - Green: Meeting or exceeding deficit goal
+ * - Orange: Deficit but not meeting goal  
+ * - Red: Surplus (positive balance)
+ */
+export function formatBalanceWithGoal(
+  balance: number, 
+  goalDeficit: number
+): {
+  text: string;
+  isDeficit: boolean;
+  color: 'success' | 'warning' | 'danger' | 'neutral';
+  vsGoal: number; // How far off from goal (negative = better than goal)
+  vsGoalText: string;
+} {
+  const isDeficit = balance < 0;
+  const absValue = Math.abs(balance);
+  const text = balance === 0 ? "0" : `${isDeficit ? '-' : '+'}${absValue.toLocaleString()}`;
+  
+  // Goal is expressed as negative (e.g., -1000 for 1000 cal deficit goal)
+  // vsGoal: positive = worse than goal, negative = better than goal
+  const vsGoal = balance - goalDeficit;
+  
+  let color: 'success' | 'warning' | 'danger' | 'neutral';
+  let vsGoalText: string;
+  
+  if (balance > 0) {
+    // Surplus - bad
+    color = 'danger';
+    vsGoalText = `${Math.abs(goalDeficit) + balance} over goal`;
+  } else if (balance <= goalDeficit) {
+    // Meeting or exceeding deficit goal - great!
+    color = 'success';
+    const extra = Math.abs(balance - goalDeficit);
+    vsGoalText = extra === 0 ? 'On target!' : `${extra} ahead of goal`;
+  } else {
+    // Deficit but not meeting goal - okay but could be better
+    color = 'warning';
+    vsGoalText = `${Math.abs(vsGoal)} to go`;
+  }
+  
+  return {
+    text,
+    isDeficit,
+    color,
+    vsGoal,
+    vsGoalText,
+  };
+}
+
+/**
  * Format weight with unit
  */
 export function formatWeight(kg: number, unit: 'kg' | 'lbs' = 'kg'): string {
