@@ -40,7 +40,7 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
-  const [refreshKey, setRefreshKey] = useState(0);
+  // refreshKey removed - was causing full page remount
 
   const fetchData = useCallback(async () => {
     const supabase = createClient();
@@ -62,7 +62,6 @@ export default function DashboardLayout({
   }, [fetchData]);
 
   const refreshData = useCallback(() => {
-    setRefreshKey(k => k + 1);
     fetchData();
   }, [fetchData]);
 
@@ -206,7 +205,7 @@ export default function DashboardLayout({
 
         {/* Main content */}
         <main className="pt-14 lg:pt-16 pb-20 lg:pb-0">
-          <div key={refreshKey}>{children}</div>
+          {children}
         </main>
 
         {/* Mobile Bottom Tabs */}

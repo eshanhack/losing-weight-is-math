@@ -1000,6 +1000,7 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
                       {/* Action Buttons */}
                       <div className="mt-3 flex gap-2">
                         <Button
+                          type="button"
                           size="sm"
                           onClick={() => handleConfirm(message.id)}
                           disabled={confirmingId === message.id}
@@ -1024,6 +1025,7 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
                             : "✓ Log this"}
                         </Button>
                         <Button 
+                          type="button"
                           size="sm" 
                           variant="outline" 
                           onClick={() => handleReject(message.id)}

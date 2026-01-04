@@ -313,6 +313,7 @@ export default function MobileDiaryPage() {
 
                     <div className="mt-3 flex gap-2">
                       <Button
+                        type="button"
                         size="sm"
                         onClick={() => handleConfirm(message.id)}
                         className="flex-1 bg-success hover:bg-success/90 text-white"
@@ -320,6 +321,7 @@ export default function MobileDiaryPage() {
                         ✓ Log it
                       </Button>
                       <Button
+                        type="button"
                         size="sm"
                         variant="outline"
                         onClick={() => handleReject(message.id)}
