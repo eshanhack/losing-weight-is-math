@@ -13,78 +13,66 @@ function getOpenAI() {
 
 const SYSTEM_PROMPT = `You are a nutrition and fitness assistant for a calorie tracking app. Parse the user's natural language input about food, exercise, OR corrections/edits to previous entries.
 
+## CRITICAL RULES:
+1. ALWAYS parse food entries, even complex multi-item meals
+2. If the user provides specific protein values (e.g., "17g protein"), USE THOSE EXACT VALUES
+3. Break down complex entries into individual items
+4. Estimate calories based on reasonable serving sizes
+5. NEVER return "unknown item" - always make your best estimate
+
 ## For NEW FOOD entries:
-- Identify each food item mentioned
-- Estimate calories and protein in grams (be reasonable, use common serving sizes)
-- Use appropriate food emojis
+- Identify EACH food item mentioned, even in long lists
+- If user provides protein amounts, use those exact values
+- Estimate calories using common nutritional data
+- Use appropriate food emojis for each item
+- For mixed dishes, break them into components
 - If quantities aren't specified, assume reasonable single servings
 
-## For NEW EXERCISE entries:
+## Common nutritional estimates per serving:
+- Can of tuna: 100-120 cal, 25g protein (unless specified otherwise)
+- Can of salmon: 120-150 cal, 20g protein
+- Greek yogurt (100g): 60-100 cal, 10g protein
+- Cottage cheese (100g): 80-100 cal, 11g protein
+- Rice cake: 35-50 cal, 1g protein
+- Banana (medium): 105 cal, 1g protein
+- Blueberries (20): 15-20 cal, 0g protein
+- Kiwi fruit: 40-50 cal, 1g protein
+- Honey (1 tbsp): 60 cal, 0g protein
+- Mayo/Sriracha mayo (1 tbsp): 90-100 cal, 0g protein
+
+## For EXERCISE entries:
 - Identify the activity and duration
-- Estimate calories burned (consider average adult, be conservative)
+- Estimate calories burned (consider average adult)
 - Use appropriate activity emojis
 
 ## For EDIT/CORRECTION requests:
-When the user wants to correct or update a previous entry (e.g., "actually the tuna had 17g protein each", "update my eggs to 100 calories", "change my breakfast calories"):
-- Identify what item they want to edit (search_term)
-- Identify what values to update (calories and/or protein)
+When user wants to correct a previous entry:
+- Identify item to edit (search_term)
+- Identify values to update
 - Use type "edit"
 
 ## For DELETE requests:
-When the user wants to remove an entry (e.g., "delete the pizza", "remove my lunch"):
-- Identify what item they want to delete (search_term)
+When user wants to remove an entry:
+- Identify item to delete (search_term)
 - Use type "delete"
 
-## Response Formats:
-
-For FOOD/EXERCISE (new entries):
+## Response Format for FOOD:
 {
-  "type": "food" or "exercise",
-  "items": [{ "description": "item name", "calories": number, "protein": number, "emoji": "🍳" }],
-  "total_calories": number,
-  "total_protein": number,
-  "message": "A friendly confirmation message"
+  "type": "food",
+  "items": [
+    { "description": "item name with quantity", "calories": number, "protein": number, "emoji": "🍳" }
+  ],
+  "total_calories": sum of all calories,
+  "total_protein": sum of all protein,
+  "message": "Brief friendly confirmation with emojis"
 }
 
-For EDIT (corrections):
-{
-  "type": "edit",
-  "search_term": "keyword to find the entry (e.g., 'tuna', 'eggs', 'breakfast')",
-  "updates": { "calories": number (optional), "protein": number (optional) },
-  "items": [],
-  "total_calories": 0,
-  "total_protein": 0,
-  "message": "A friendly confirmation of the edit"
-}
+## Example - Complex meal:
+User: "I ate: can of tuna (17g protein), can of salmon (17g protein) mixed with greek yogurt, cottage cheese and sriracha mayo. 3 rice cakes, half a banana with honey. 20 blueberries, 1 kiwi, 130g greek yogurt"
 
-For DELETE:
-{
-  "type": "delete",
-  "search_term": "keyword to find the entry",
-  "items": [],
-  "total_calories": 0,
-  "total_protein": 0,
-  "message": "A friendly confirmation of deletion"
-}
+Response: {"type":"food","items":[{"description":"Can of tuna","calories":100,"protein":17,"emoji":"🐟"},{"description":"Can of salmon","calories":120,"protein":17,"emoji":"🐟"},{"description":"Greek yogurt (tbsp)","calories":30,"protein":3,"emoji":"🥛"},{"description":"Cottage cheese","calories":80,"protein":11,"emoji":"🧀"},{"description":"Sriracha mayo","calories":90,"protein":0,"emoji":"🌶️"},{"description":"3 rice cakes","calories":105,"protein":3,"emoji":"🍘"},{"description":"Half banana","calories":50,"protein":1,"emoji":"🍌"},{"description":"Honey drizzle","calories":30,"protein":0,"emoji":"🍯"},{"description":"20 blueberries","calories":16,"protein":0,"emoji":"🫐"},{"description":"1 kiwi","calories":42,"protein":1,"emoji":"🥝"},{"description":"130g greek yogurt","calories":85,"protein":13,"emoji":"🥛"}],"total_calories":748,"total_protein":66,"message":"Logged your meal! 🐟🥛🍌 That's a protein-packed feast!"}
 
-## Examples:
-
-User: "2 eggs and toast"
-Response: {"type":"food","items":[{"description":"2 eggs","calories":180,"protein":12,"emoji":"🍳"},{"description":"1 slice toast","calories":80,"protein":2,"emoji":"🍞"}],"total_calories":260,"total_protein":14,"message":"Got it! 🍳 Logging 2 eggs and toast."}
-
-User: "30 min run"
-Response: {"type":"exercise","items":[{"description":"30 minute run","calories":300,"protein":0,"emoji":"🏃"}],"total_calories":300,"total_protein":0,"message":"Nice work! 🏃 Logging 30 minute run."}
-
-User: "actually the tuna I had earlier had 17g of protein each, not 40g"
-Response: {"type":"edit","search_term":"tuna","updates":{"protein":17},"items":[],"total_calories":0,"total_protein":0,"message":"Got it! 📝 I'll update your tuna entries to 17g protein each."}
-
-User: "update my eggs to have 200 calories"
-Response: {"type":"edit","search_term":"eggs","updates":{"calories":200},"items":[],"total_calories":0,"total_protein":0,"message":"Sure! 📝 Updating eggs to 200 calories."}
-
-User: "delete the pizza I logged"
-Response: {"type":"delete","search_term":"pizza","items":[],"total_calories":0,"total_protein":0,"message":"🗑️ I'll remove the pizza from your log."}
-
-Only respond with the JSON object, no additional text.`;
+Only respond with valid JSON, no additional text.`;
 
 export async function POST(request: Request) {
   try {
@@ -111,7 +99,7 @@ export async function POST(request: Request) {
         { role: "user", content: message },
       ],
       temperature: 0.3,
-      max_tokens: 500,
+      max_tokens: 1500, // Increased for complex multi-item entries
     });
 
     const responseText = completion.choices[0]?.message?.content;
@@ -146,45 +134,77 @@ export async function POST(request: Request) {
   }
 }
 
+// Food database for mock parsing
+const FOOD_DATABASE: Record<string, { calories: number; protein: number; emoji: string }> = {
+  // Proteins
+  tuna: { calories: 100, protein: 25, emoji: "🐟" },
+  salmon: { calories: 120, protein: 20, emoji: "🐟" },
+  chicken: { calories: 165, protein: 31, emoji: "🍗" },
+  egg: { calories: 90, protein: 6, emoji: "🍳" },
+  eggs: { calories: 90, protein: 6, emoji: "🍳" },
+  beef: { calories: 250, protein: 26, emoji: "🥩" },
+  steak: { calories: 270, protein: 26, emoji: "🥩" },
+  pork: { calories: 240, protein: 25, emoji: "🥓" },
+  shrimp: { calories: 85, protein: 18, emoji: "🦐" },
+  fish: { calories: 130, protein: 22, emoji: "🐟" },
+  
+  // Dairy
+  yogurt: { calories: 100, protein: 10, emoji: "🥛" },
+  "greek yogurt": { calories: 100, protein: 10, emoji: "🥛" },
+  "cottage cheese": { calories: 100, protein: 11, emoji: "🧀" },
+  cheese: { calories: 110, protein: 7, emoji: "🧀" },
+  milk: { calories: 150, protein: 8, emoji: "🥛" },
+  
+  // Carbs
+  rice: { calories: 200, protein: 4, emoji: "🍚" },
+  "rice cake": { calories: 35, protein: 1, emoji: "🍘" },
+  "rice cakes": { calories: 35, protein: 1, emoji: "🍘" },
+  bread: { calories: 80, protein: 3, emoji: "🍞" },
+  toast: { calories: 80, protein: 3, emoji: "🍞" },
+  pasta: { calories: 220, protein: 8, emoji: "🍝" },
+  oatmeal: { calories: 150, protein: 5, emoji: "🥣" },
+  
+  // Fruits
+  banana: { calories: 105, protein: 1, emoji: "🍌" },
+  apple: { calories: 95, protein: 0, emoji: "🍎" },
+  blueberries: { calories: 1, protein: 0, emoji: "🫐" },
+  blueberry: { calories: 1, protein: 0, emoji: "🫐" },
+  kiwi: { calories: 42, protein: 1, emoji: "🥝" },
+  orange: { calories: 62, protein: 1, emoji: "🍊" },
+  strawberries: { calories: 4, protein: 0, emoji: "🍓" },
+  avocado: { calories: 240, protein: 3, emoji: "🥑" },
+  
+  // Other
+  honey: { calories: 60, protein: 0, emoji: "🍯" },
+  mayo: { calories: 90, protein: 0, emoji: "🥫" },
+  "sriracha mayo": { calories: 90, protein: 0, emoji: "🌶️" },
+  coffee: { calories: 5, protein: 0, emoji: "☕" },
+  pizza: { calories: 285, protein: 12, emoji: "🍕" },
+  burger: { calories: 350, protein: 20, emoji: "🍔" },
+  salad: { calories: 100, protein: 3, emoji: "🥗" },
+  sandwich: { calories: 350, protein: 15, emoji: "🥪" },
+};
+
 // Mock response for development without OpenAI key
 function getMockResponse(message: string): AIParseResponse {
   const lowerMessage = message.toLowerCase();
 
-  // Detect if this is an edit/update request - more comprehensive detection
+  // Detect if this is an edit/update request
   const editPatterns = [
-    /update/i,
-    /change/i,
-    /correct/i,
-    /actually/i,
-    /edit/i,
-    /modify/i,
-    /fix/i,
-    /adjust/i,
-    /should\s+(?:be|have)/i,
-    /was\s+(?:actually|really)/i,
-    /had\s+\d+g/i,  // "had 17g"
-    /not\s+\d+/i,   // "not 40g"
-    /instead\s+of/i,
-    /wrong/i,
-    /mistake/i,
+    /update/i, /change/i, /correct/i, /actually/i, /edit/i, /modify/i, /fix/i,
+    /adjust/i, /should\s+(?:be|have)/i, /was\s+(?:actually|really)/i,
+    /not\s+\d+/i, /instead\s+of/i, /wrong/i, /mistake/i,
   ];
-  
-  const isEdit = editPatterns.some(pattern => pattern.test(lowerMessage));
+  const isEdit = editPatterns.some(pattern => pattern.test(lowerMessage)) && 
+                 !lowerMessage.includes("i ate") && !lowerMessage.includes("i had");
 
   // Detect if this is a delete request
-  const isDelete =
-    lowerMessage.includes("delete") ||
-    lowerMessage.includes("remove") ||
-    lowerMessage.includes("undo") ||
-    lowerMessage.includes("cancel");
+  const isDelete = /\b(delete|remove|undo)\b/.test(lowerMessage);
 
   if (isDelete) {
-    // Try to find what they want to delete
-    const words = lowerMessage.split(" ");
-    const deleteIdx = words.findIndex(w => ["delete", "remove", "undo", "cancel"].includes(w));
-    const afterDelete = words.slice(deleteIdx + 1).join(" ").replace(/^the\s+/, "");
-    const searchTerm = afterDelete.split(/\s+/)[0] || "item";
-    
+    const words = lowerMessage.split(/\s+/);
+    const deleteIdx = words.findIndex(w => ["delete", "remove", "undo"].includes(w));
+    const searchTerm = words.slice(deleteIdx + 1).join(" ").replace(/^the\s+/, "").split(/\s+/)[0] || "item";
     return {
       type: "delete",
       search_term: searchTerm,
@@ -196,42 +216,19 @@ function getMockResponse(message: string): AIParseResponse {
   }
 
   if (isEdit) {
-    // Try to extract the protein or calorie value and what to search for
-    const proteinMatch = lowerMessage.match(/(\d+)\s*g(?:rams?)?\s*(?:of\s+)?(?:protein)?/i) ||
-                         lowerMessage.match(/protein[:\s]+(\d+)/i) ||
-                         lowerMessage.match(/had\s+(\d+)\s*g/i);
+    const proteinMatch = lowerMessage.match(/(\d+)\s*g(?:rams?)?\s*(?:of\s+)?(?:protein)?/i);
     const calorieMatch = lowerMessage.match(/(\d+)\s*(?:cal(?:ories)?|kcal)/i);
-    
-    // Find the food item being referenced - expanded list
-    const foodKeywords = [
-      "tuna", "egg", "eggs", "chicken", "rice", "bread", "toast", "milk", "coffee",
-      "lunch", "dinner", "breakfast", "snack", "meal", "pizza", "burger", "salad",
-      "sandwich", "fruit", "apple", "banana", "yogurt", "oatmeal", "pasta", "fish",
-      "steak", "beef", "pork", "salmon", "shrimp", "avocado", "cheese", "protein"
-    ];
-    let searchTerm = foodKeywords.find(food => lowerMessage.includes(food)) || "";
-    
-    // If no food keyword found, try to extract from context
-    if (!searchTerm) {
-      // Look for patterns like "the X I had" or "my X"
-      const contextMatch = lowerMessage.match(/(?:the|my)\s+(\w+)\s+(?:i\s+)?(?:had|ate|logged|entered)/i);
-      if (contextMatch) {
-        searchTerm = contextMatch[1];
-      } else {
-        searchTerm = "item";
-      }
-    }
+    const foodKeywords = Object.keys(FOOD_DATABASE);
+    const searchTerm = foodKeywords.find(food => lowerMessage.includes(food)) || "item";
     
     const updates: { calories?: number; protein?: number } = {};
     if (proteinMatch) updates.protein = parseInt(proteinMatch[1]);
     if (calorieMatch) updates.calories = parseInt(calorieMatch[1]);
     
-    // If we found updates, return edit response
     if (Object.keys(updates).length > 0) {
       const updateParts = [];
       if (updates.protein !== undefined) updateParts.push(`${updates.protein}g protein`);
       if (updates.calories !== undefined) updateParts.push(`${updates.calories} calories`);
-      
       return {
         type: "edit",
         search_term: searchTerm,
@@ -244,66 +241,123 @@ function getMockResponse(message: string): AIParseResponse {
     }
   }
 
-  // Detect if exercise or food
-  const isExercise =
-    lowerMessage.includes("run") ||
-    lowerMessage.includes("walk") ||
-    lowerMessage.includes("exercise") ||
-    lowerMessage.includes("gym") ||
-    lowerMessage.includes("workout") ||
-    lowerMessage.includes("bike") ||
-    lowerMessage.includes("swim");
-
-  if (isExercise) {
+  // Detect exercise
+  const exerciseMatch = lowerMessage.match(/(\d+)\s*(?:min(?:ute)?s?)?\s*(run|walk|jog|bike|swim|workout|exercise|gym)/i);
+  if (exerciseMatch) {
+    const duration = parseInt(exerciseMatch[1]) || 30;
+    const activity = exerciseMatch[2];
+    const caloriesPer30 = { run: 300, walk: 150, jog: 250, bike: 250, swim: 350, workout: 200, exercise: 200, gym: 250 };
+    const calories = Math.round((caloriesPer30[activity as keyof typeof caloriesPer30] || 200) * (duration / 30));
     return {
       type: "exercise",
-      items: [
-        {
-          description: "Exercise session",
-          calories: 300,
-          protein: 0,
-          emoji: "🏃",
-        },
-      ],
-      total_calories: 300,
+      items: [{ description: `${duration} minute ${activity}`, calories, protein: 0, emoji: "🏃" }],
+      total_calories: calories,
       total_protein: 0,
-      message: "Nice workout! 🏃 Here's what I logged:",
+      message: `Nice workout! 🏃 Logged ${duration} min ${activity}.`,
     };
   }
 
-  // Common food patterns
-  if (lowerMessage.includes("egg")) {
-    const count = lowerMessage.match(/(\d+)\s*egg/)?.[1] || "2";
-    return {
-      type: "food",
-      items: [
-        {
-          description: `${count} eggs`,
-          calories: parseInt(count) * 90,
-          protein: parseInt(count) * 6,
-          emoji: "🍳",
-        },
-      ],
-      total_calories: parseInt(count) * 90,
-      total_protein: parseInt(count) * 6,
-      message: "Got it! 🍳 Here's what I logged:",
-    };
+  // Parse food items - smart multi-item parsing
+  const items: Array<{ description: string; calories: number; protein: number; emoji: string }> = [];
+  
+  // Split by common delimiters
+  const parts = lowerMessage
+    .replace(/i ate:?|i had:?|for breakfast:?|for lunch:?|for dinner:?/gi, "")
+    .split(/[,\-\n•]+/)
+    .map(p => p.trim())
+    .filter(p => p.length > 0);
+
+  for (const part of parts) {
+    // Look for quantity patterns
+    const quantityMatch = part.match(/^(\d+(?:\.\d+)?)\s*(?:x\s+)?(.+)/i) || 
+                          part.match(/(.+?)\s*(?:\(|x\s*)(\d+)/i);
+    
+    // Check for user-provided protein
+    const proteinProvided = part.match(/\(?\s*(\d+)\s*g\s*(?:of\s+)?protein\s*\)?/i);
+    
+    let quantity = 1;
+    let foodPart = part;
+    
+    if (quantityMatch) {
+      quantity = parseFloat(quantityMatch[1]) || 1;
+      foodPart = quantityMatch[2] || part;
+    }
+    
+    // Handle "half" quantities
+    if (part.includes("half")) {
+      quantity = 0.5;
+      foodPart = part.replace(/half\s*(a\s+)?/i, "");
+    }
+    
+    // Find matching food in database
+    let matched = false;
+    for (const [food, data] of Object.entries(FOOD_DATABASE)) {
+      if (foodPart.includes(food)) {
+        const protein = proteinProvided ? parseInt(proteinProvided[1]) : Math.round(data.protein * quantity);
+        const calories = Math.round(data.calories * quantity);
+        
+        items.push({
+          description: quantity !== 1 ? `${quantity} ${food}` : food.charAt(0).toUpperCase() + food.slice(1),
+          calories,
+          protein,
+          emoji: data.emoji,
+        });
+        matched = true;
+        break;
+      }
+    }
+    
+    // If no match, create a generic entry
+    if (!matched && foodPart.length > 2) {
+      const protein = proteinProvided ? parseInt(proteinProvided[1]) : 5;
+      items.push({
+        description: foodPart.replace(/\([^)]*\)/g, "").trim(),
+        calories: 100,
+        protein,
+        emoji: "🍽️",
+      });
+    }
   }
 
-  // Default food response
+  // If no items parsed, try to find individual foods in the whole message
+  if (items.length === 0) {
+    for (const [food, data] of Object.entries(FOOD_DATABASE)) {
+      const regex = new RegExp(`(\\d+)?\\s*(?:cans?\\s+(?:of\\s+)?)?${food}s?`, "i");
+      const match = lowerMessage.match(regex);
+      if (match) {
+        const quantity = parseInt(match[1]) || 1;
+        const proteinMatch = lowerMessage.match(new RegExp(`${food}[^,]*?(\\d+)\\s*g\\s*(?:of\\s+)?protein`, "i"));
+        const protein = proteinMatch ? parseInt(proteinMatch[1]) : data.protein * quantity;
+        
+        items.push({
+          description: `${quantity > 1 ? quantity + " " : ""}${food}`,
+          calories: data.calories * quantity,
+          protein,
+          emoji: data.emoji,
+        });
+      }
+    }
+  }
+
+  // Still no items? Create a generic meal
+  if (items.length === 0) {
+    items.push({
+      description: "Meal",
+      calories: 400,
+      protein: 20,
+      emoji: "🍽️",
+    });
+  }
+
+  const totalCalories = items.reduce((sum, item) => sum + item.calories, 0);
+  const totalProtein = items.reduce((sum, item) => sum + item.protein, 0);
+
   return {
     type: "food",
-    items: [
-      {
-        description: "Meal",
-        calories: 400,
-        protein: 20,
-        emoji: "🍽️",
-      },
-    ],
-    total_calories: 400,
-    total_protein: 20,
-    message: "Got it! 🍽️ Here's what I logged:",
+    items,
+    total_calories: totalCalories,
+    total_protein: totalProtein,
+    message: `Got it! 🍽️ Logged ${items.length} item${items.length > 1 ? "s" : ""}.`,
   };
 }
 
