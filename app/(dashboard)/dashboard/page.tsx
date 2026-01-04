@@ -1102,25 +1102,29 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
     }
   };
 
-  // Create a saved meal from /create command
-  const handleCreateMealCommand = async (input: string) => {
-    const match = input.match(/^\/create\s+([a-z0-9-]+)\s+(.+)$/i);
+  // Create a saved meal OR exercise from /create command
+  const handleCreateCommand = async (input: string) => {
+    const match = input.match(/^\/create\s+([a-z0-9_-]+)\s+(.+)$/i);
     if (!match) {
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
         role: "assistant",
-        content: "❌ Invalid format. Use: `/create meal-name description of ingredients`\n\nExample: `/create can-sushi can of tuna, can of salmon, greek yogurt`",
+        content: "❌ Invalid format.\n\n**For meals:**\n`/create meal-name ingredients`\n\n**For exercises:**\n`/create exercise_name 30 min running burned 300 cal`",
         timestamp: new Date().toISOString(),
       }]);
       return true;
     }
 
-    const [, mealName, description] = match;
-    const normalizedName = mealName.toLowerCase();
+    const [, presetName, description] = match;
+    const normalizedName = presetName.toLowerCase();
+    const lowerDesc = description.toLowerCase();
+
+    // Detect if this is an exercise (contains burn/burned/calories burned/workout/exercise keywords)
+    const isExercise = /\b(burn|burned|burning|workout|exercise|run|walk|jog|swim|cycle|hiit|cardio|treadmill|incline)\b/i.test(lowerDesc) &&
+                       /\b(\d+)\s*(cal|kcal|calories)\b/i.test(lowerDesc);
 
     setLoading(true);
     
-    // Parse the meal through AI to get calories/protein
     try {
       const response = await fetch("/api/ai/parse", {
         method: "POST",
@@ -1129,22 +1133,6 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
       });
       const data = await response.json();
 
-      if (data.type !== "food" || !data.items || data.items.length === 0) {
-        setMessages(prev => [...prev, {
-          id: Date.now().toString(),
-          role: "assistant",
-          content: "❌ Couldn't parse that as food items. Try describing the ingredients more clearly.",
-          timestamp: new Date().toISOString(),
-        }]);
-        setLoading(false);
-        return true;
-      }
-
-      // Generate a short summary (first 3 items + "...")
-      const itemNames = data.items.slice(0, 3).map((i: { description: string }) => i.description);
-      const summary = itemNames.join(", ") + (data.items.length > 3 ? "..." : "");
-
-      // Save to database
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -1152,19 +1140,93 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
         return true;
       }
 
-      const { error } = await supabase.from("saved_meals").upsert({
-        user_id: user.id,
-        name: normalizedName,
-        display_name: mealName.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase()),
-        description: description,
-        summary: summary,
-        total_calories: data.total_calories,
-        total_protein: data.total_protein,
-        items: data.items,
-        updated_at: new Date().toISOString(),
-      }, {
-        onConflict: "user_id,name",
-      });
+      if (isExercise || data.type === "exercise") {
+        // Handle as exercise
+        if (!data.items || data.items.length === 0) {
+          // Try to extract calories manually from description
+          const calMatch = description.match(/(\d+)\s*(cal|kcal|calories)/i);
+          const calories = calMatch ? parseInt(calMatch[1]) : 0;
+          
+          if (calories === 0) {
+            setMessages(prev => [...prev, {
+              id: Date.now().toString(),
+              role: "assistant",
+              content: "❌ Couldn't detect calories burned. Include like: `burned 300 cal`",
+              timestamp: new Date().toISOString(),
+            }]);
+            setLoading(false);
+            return true;
+          }
+
+          // Create exercise item manually
+          data.items = [{ description: description, calories: calories, emoji: "🏃" }];
+          data.total_calories = calories;
+        }
+
+        const summary = data.items[0]?.description || description;
+        
+        const { error } = await supabase.from("saved_meals").upsert({
+          user_id: user.id,
+          name: normalizedName,
+          display_name: presetName.replace(/[-_]/g, " ").replace(/\b\w/g, c => c.toUpperCase()),
+          description: description,
+          summary: summary.length > 50 ? summary.substring(0, 47) + "..." : summary,
+          total_calories: -(data.total_calories), // Negative = exercise (burns calories)
+          total_protein: 0,
+          items: data.items,
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: "user_id,name",
+        });
+
+        if (error) {
+          console.error("Error saving exercise:", error);
+          setMessages(prev => [...prev, {
+            id: Date.now().toString(),
+            role: "assistant",
+            content: "❌ Error saving exercise. Please try again.",
+            timestamp: new Date().toISOString(),
+          }]);
+        } else {
+          loadSavedMeals();
+          setMessages(prev => [...prev, {
+            id: Date.now().toString(),
+            role: "assistant",
+            content: `✅ Saved exercise **"${presetName}"**!\n\n🏃 Burns ${data.total_calories} cal\n\nType **@${normalizedName}** anytime to log this workout!`,
+            timestamp: new Date().toISOString(),
+          }]);
+          showToast(`Saved exercise: ${presetName}`, "exercise");
+        }
+      } else {
+        // Handle as food/meal
+        if (data.type !== "food" || !data.items || data.items.length === 0) {
+          setMessages(prev => [...prev, {
+            id: Date.now().toString(),
+            role: "assistant",
+            content: "❌ Couldn't parse that. For meals, describe ingredients. For exercises, include `burned X cal`.",
+            timestamp: new Date().toISOString(),
+          }]);
+          setLoading(false);
+          return true;
+        }
+
+        // Generate a short summary (first 3 items + "...")
+        const itemNames = data.items.slice(0, 3).map((i: { description: string }) => i.description);
+        const summary = itemNames.join(", ") + (data.items.length > 3 ? "..." : "");
+
+        const { error } = await supabase.from("saved_meals").upsert({
+          user_id: user.id,
+          name: normalizedName,
+          display_name: presetName.replace(/[-_]/g, " ").replace(/\b\w/g, c => c.toUpperCase()),
+          description: description,
+          summary: summary,
+          total_calories: data.total_calories,
+          total_protein: data.total_protein,
+          items: data.items,
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: "user_id,name",
+        });
 
       if (error) {
         console.error("Error saving meal:", error);
@@ -1436,7 +1498,7 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
       };
       setMessages(prev => [...prev, userMessage]);
       setInput("");
-      await handleCreateMealCommand(trimmedInput);
+      await handleCreateCommand(trimmedInput);
       return;
     }
 
@@ -2489,11 +2551,13 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex-1 min-w-0">
-                      <span className="font-medium text-sm text-primary">@{meal.name}</span>
+                      <span className="font-medium text-sm text-primary">
+                        {meal.total_calories < 0 ? "🏃" : "🍽️"} @{meal.name}
+                      </span>
                       <span className="text-muted-foreground text-xs ml-2 truncate">{meal.summary}</span>
                     </div>
-                    <span className="text-xs text-muted-foreground whitespace-nowrap">
-                      {meal.total_calories} cal
+                    <span className={`text-xs whitespace-nowrap ${meal.total_calories < 0 ? "text-success" : "text-muted-foreground"}`}>
+                      {meal.total_calories < 0 ? `burns ${Math.abs(meal.total_calories)}` : meal.total_calories} cal
                     </span>
                   </div>
                 </button>
@@ -2563,7 +2627,7 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
           </Button>
         </form>
         <p className="text-[10px] text-muted-foreground mt-1.5 text-center">
-          Type <span className="text-primary">@</span> for saved meals • <span className="text-primary">/create</span> [meal name] [content of meal]
+          Type <span className="text-primary">@</span> for saved presets • <span className="text-primary">/create</span> [name] [meal or exercise]
         </p>
       </div>
     </div>
