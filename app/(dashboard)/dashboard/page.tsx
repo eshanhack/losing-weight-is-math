@@ -95,6 +95,40 @@ interface ChatMessage {
 // DASHBOARD STATS COMPONENT
 // ============================================================================
 
+// Progress bar component
+function ProgressBar({ value, max, showGradient = false }: { value: number; max: number; showGradient?: boolean }) {
+  const percentage = Math.min(100, Math.max(0, (value / max) * 100));
+  
+  return (
+    <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
+      <div 
+        className={`h-full rounded-full transition-all duration-500 ${
+          showGradient ? "progress-gradient" : "bg-primary"
+        }`}
+        style={{ width: `${percentage}%` }}
+      />
+    </div>
+  );
+}
+
+// Segmented progress bar (like FitFuel)
+function SegmentedProgress({ segments = 20, filledSegments = 0, color = "primary" }: { segments?: number; filledSegments?: number; color?: string }) {
+  const colorClass = color === "success" ? "bg-success" : color === "danger" ? "bg-danger" : color === "gold" ? "bg-gold" : "bg-primary";
+  
+  return (
+    <div className="flex gap-0.5">
+      {Array.from({ length: segments }).map((_, i) => (
+        <div
+          key={i}
+          className={`h-1 flex-1 rounded-sm transition-colors ${
+            i < filledSegments ? colorClass : "bg-secondary"
+          }`}
+        />
+      ))}
+    </div>
+  );
+}
+
 function DashboardStats({ 
   stats, 
   calendar, 
@@ -124,20 +158,30 @@ function DashboardStats({
 }) {
   const formattedBalance = formatBalance(stats.todayBalance);
   const formattedSevenDay = formatBalance(stats.sevenDayBalance);
+  
+  // Calculate progress percentages
+  const calorieProgress = stats.maintenanceCalories > 0 ? Math.round((stats.todayIntake / stats.maintenanceCalories) * 100) : 0;
+  const proteinProgress = stats.proteinGoal > 0 ? Math.round((stats.todayProtein / stats.proteinGoal) * 100) : 0;
 
   return (
-    <div className="space-y-6 h-full">
+    <div className="space-y-6 h-full custom-scrollbar">
       {/* Header */}
-      <div>
-        <h1 className="font-display text-2xl lg:text-3xl font-bold">
-          Hey {profile?.first_name} 👋
-        </h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          Here's your progress at a glance
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="font-display text-2xl lg:text-3xl font-semibold text-foreground">
+            My Progress
+          </h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            Track your daily caloric balance
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="pill pill-success">Active</span>
+          <span className="pill pill-muted">This Week</span>
+        </div>
       </div>
 
-      {/* Stat Cards - responsive grid */}
+      {/* Stat Cards - FitFuel style */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 lg:gap-4">
         {/* Card 1: Today's Balance */}
         <motion.div
@@ -145,31 +189,35 @@ function DashboardStats({
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
         >
-          <Card
-            className={`p-4 lg:p-5 bg-card border-border transition-all h-full ${
-              formattedBalance.isDeficit ? "border-success/30" : stats.todayBalance > 0 ? "border-danger/30" : ""
-            }`}
-          >
-            <p className="text-xs text-muted-foreground mb-1">Today</p>
-            <p className={`font-display text-2xl lg:text-3xl font-bold ${
-              formattedBalance.color === "success" ? "text-success" : formattedBalance.color === "danger" ? "text-danger" : ""
-            }`}>
-              {formattedBalance.text}
-            </p>
-            <p className="text-xs lg:text-sm text-muted-foreground">kcal</p>
-            <div className="mt-2 pt-2 border-t border-border text-xs lg:text-sm text-muted-foreground space-y-0.5">
-              <div className="flex justify-between">
-                <span>In</span>
-                <span>{stats.todayIntake}</span>
+          <Card className="p-4 lg:p-5 bg-card border-border h-full card-hover">
+            <div className="flex items-start justify-between mb-3">
+              <div className={`icon-container ${formattedBalance.isDeficit ? "bg-success/10" : stats.todayBalance > 0 ? "bg-danger/10" : "bg-primary/10"}`}>
+                <span className="text-lg">📊</span>
               </div>
-              <div className="flex justify-between">
-                <span>Out</span>
-                <span className="text-success">+{stats.todayOuttake}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Protein</span>
-                <span>{stats.todayProtein}/{stats.proteinGoal}g</span>
-              </div>
+              <button className="text-muted-foreground hover:text-foreground">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M6 10a2 2 0 11-4 0 2 2 0 014 0zM12 10a2 2 0 11-4 0 2 2 0 014 0zM16 12a2 2 0 100-4 2 2 0 000 4z" />
+                </svg>
+              </button>
+            </div>
+            <h3 className="font-display font-semibold text-foreground mb-1">Today's Balance</h3>
+            <div className="flex items-baseline gap-2 mb-3">
+              <span className={`font-display text-2xl lg:text-3xl font-bold ${
+                formattedBalance.color === "success" ? "text-success" : formattedBalance.color === "danger" ? "text-danger" : "text-foreground"
+              }`}>
+                {formattedBalance.text}
+              </span>
+              <span className="text-sm text-muted-foreground">kcal</span>
+            </div>
+            <SegmentedProgress 
+              segments={20} 
+              filledSegments={Math.min(20, Math.round(calorieProgress / 5))} 
+              color={formattedBalance.isDeficit ? "success" : stats.todayBalance > 0 ? "danger" : "primary"}
+            />
+            <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+              <span>{calorieProgress}% of goal</span>
+              <span>•</span>
+              <span>{stats.todayIntake} in / {stats.todayOuttake} out</span>
             </div>
           </Card>
         </motion.div>
@@ -180,20 +228,36 @@ function DashboardStats({
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15 }}
         >
-          <Card className={`p-4 lg:p-5 bg-card border-border h-full ${formattedSevenDay.isDeficit ? "border-success/30" : ""}`}>
-            <p className="text-xs text-muted-foreground mb-1">7-Day Total</p>
-            <p className={`font-display text-2xl lg:text-3xl font-bold ${
-              formattedSevenDay.color === "success" ? "text-success" : formattedSevenDay.color === "danger" ? "text-danger" : ""
-            }`}>
-              {formattedSevenDay.text}
-            </p>
-            <p className="text-xs lg:text-sm text-muted-foreground">kcal</p>
-            <div className="mt-2 pt-2 border-t border-border">
-              <p className="text-xs lg:text-sm text-muted-foreground">
-                Avg: <span className={`font-medium ${stats.sevenDayAverage < 0 ? "text-success" : "text-danger"}`}>
-                  {stats.sevenDayAverage < 0 ? "" : "+"}{stats.sevenDayAverage}
-                </span>/day
-              </p>
+          <Card className="p-4 lg:p-5 bg-card border-border h-full card-hover">
+            <div className="flex items-start justify-between mb-3">
+              <div className={`icon-container ${formattedSevenDay.isDeficit ? "bg-success/10" : "bg-primary/10"}`}>
+                <span className="text-lg">📈</span>
+              </div>
+              <button className="text-muted-foreground hover:text-foreground">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M6 10a2 2 0 11-4 0 2 2 0 014 0zM12 10a2 2 0 11-4 0 2 2 0 014 0zM16 12a2 2 0 100-4 2 2 0 000 4z" />
+                </svg>
+              </button>
+            </div>
+            <h3 className="font-display font-semibold text-foreground mb-1">7-Day Total</h3>
+            <div className="flex items-baseline gap-2 mb-3">
+              <span className={`font-display text-2xl lg:text-3xl font-bold ${
+                formattedSevenDay.color === "success" ? "text-success" : formattedSevenDay.color === "danger" ? "text-danger" : "text-foreground"
+              }`}>
+                {formattedSevenDay.text}
+              </span>
+              <span className="text-sm text-muted-foreground">kcal</span>
+            </div>
+            <SegmentedProgress 
+              segments={20} 
+              filledSegments={14} 
+              color={formattedSevenDay.isDeficit ? "success" : "danger"}
+            />
+            <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+              <span>Daily avg:</span>
+              <span className={formattedSevenDay.isDeficit ? "text-success" : "text-danger"}>
+                {stats.sevenDayAverage < 0 ? "" : "+"}{stats.sevenDayAverage}/day
+              </span>
             </div>
           </Card>
         </motion.div>
@@ -204,14 +268,33 @@ function DashboardStats({
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
         >
-          <Card className="p-4 lg:p-5 bg-card border-border h-full">
-            <p className="text-xs text-muted-foreground mb-1">Real Weight</p>
-            <p className="font-display text-2xl lg:text-3xl font-bold">
-              {stats.realWeight?.toFixed(1) || "—"}
-            </p>
-            <p className="text-xs lg:text-sm text-muted-foreground">kg</p>
-            <div className="mt-2 pt-2 border-t border-border">
-              <p className="text-xs lg:text-sm text-muted-foreground">7-day average</p>
+          <Card className="p-4 lg:p-5 bg-card border-border h-full card-hover">
+            <div className="flex items-start justify-between mb-3">
+              <div className="icon-container bg-primary/10">
+                <span className="text-lg">⚖️</span>
+              </div>
+              <button className="text-muted-foreground hover:text-foreground">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M6 10a2 2 0 11-4 0 2 2 0 014 0zM12 10a2 2 0 11-4 0 2 2 0 014 0zM16 12a2 2 0 100-4 2 2 0 000 4z" />
+                </svg>
+              </button>
+            </div>
+            <h3 className="font-display font-semibold text-foreground mb-1">Real Weight</h3>
+            <div className="flex items-baseline gap-2 mb-3">
+              <span className="font-display text-2xl lg:text-3xl font-bold text-foreground">
+                {stats.realWeight?.toFixed(1) || "—"}
+              </span>
+              <span className="text-sm text-muted-foreground">kg</span>
+            </div>
+            <SegmentedProgress segments={20} filledSegments={16} color="primary" />
+            <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+              <span>7-day average</span>
+              {profile?.goal_weight_kg && (
+                <>
+                  <span>•</span>
+                  <span>Goal: {profile.goal_weight_kg}kg</span>
+                </>
+              )}
             </div>
           </Card>
         </motion.div>
@@ -222,37 +305,90 @@ function DashboardStats({
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.25 }}
         >
-          <Card className="p-4 lg:p-5 bg-card border-border border-gold/20 h-full">
-            <p className="text-xs text-muted-foreground mb-1">Streak</p>
-            <p className="font-display text-2xl lg:text-3xl font-bold text-gold">
-              🔥 {stats.streak}
-            </p>
-            <p className="text-xs lg:text-sm text-muted-foreground">days</p>
-            <div className="mt-2 pt-2 border-t border-border">
-              <p className="text-xs lg:text-sm text-muted-foreground">Keep going!</p>
+          <Card className="p-4 lg:p-5 bg-card border-border border-gold/20 h-full card-hover">
+            <div className="flex items-start justify-between mb-3">
+              <div className="icon-container bg-gold/10">
+                <span className="text-lg">🔥</span>
+              </div>
+              <button className="text-muted-foreground hover:text-foreground">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M6 10a2 2 0 11-4 0 2 2 0 014 0zM12 10a2 2 0 11-4 0 2 2 0 014 0zM16 12a2 2 0 100-4 2 2 0 000 4z" />
+                </svg>
+              </button>
+            </div>
+            <h3 className="font-display font-semibold text-foreground mb-1">Current Streak</h3>
+            <div className="flex items-baseline gap-2 mb-3">
+              <span className="font-display text-2xl lg:text-3xl font-bold text-gold">
+                {stats.streak}
+              </span>
+              <span className="text-sm text-muted-foreground">days</span>
+            </div>
+            <SegmentedProgress segments={20} filledSegments={Math.min(20, stats.streak * 2)} color="gold" />
+            <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+              <span>Keep it going!</span>
+              <span>•</span>
+              <span className="text-gold">Best: {stats.streak} days</span>
             </div>
           </Card>
         </motion.div>
       </div>
 
-      {/* Calendar - responsive */}
+      {/* Protein Progress Card */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.28 }}
+      >
+        <Card className="p-4 lg:p-5 bg-card border-border">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <div className="icon-container bg-success/10">
+                <span className="text-lg">🥩</span>
+              </div>
+              <div>
+                <h3 className="font-display font-semibold text-foreground">Protein Goal</h3>
+                <p className="text-sm text-muted-foreground">{stats.todayProtein}g of {stats.proteinGoal}g today</p>
+              </div>
+            </div>
+            <span className={`text-2xl font-display font-bold ${proteinProgress >= 100 ? "text-success" : "text-foreground"}`}>
+              {proteinProgress}%
+            </span>
+          </div>
+          <ProgressBar value={stats.todayProtein} max={stats.proteinGoal} />
+        </Card>
+      </motion.div>
+
+      {/* Calendar - FitFuel style */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3 }}
         className="flex-1"
       >
-        <Card className="p-4 lg:p-6 bg-card border-border h-full">
-          <h2 className="font-display text-base lg:text-lg font-semibold mb-3 lg:mb-4">
-            {new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}
-          </h2>
+        <Card className="p-4 lg:p-6 bg-card border-border">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-display text-lg font-semibold text-foreground">
+              {new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+            </h2>
+            <div className="flex items-center gap-2">
+              <button className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <button className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+          </div>
 
           {/* Day headers */}
-          <div className="grid grid-cols-7 gap-1 lg:gap-2 mb-1 lg:mb-2">
-            {["S", "M", "T", "W", "T", "F", "S"].map((day, i) => (
-              <div key={i} className="text-center text-xs lg:text-sm text-muted-foreground font-medium py-1 lg:py-2">
-                <span className="hidden lg:inline">{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][i]}</span>
-                <span className="lg:hidden">{day}</span>
+          <div className="grid grid-cols-7 gap-1 lg:gap-2 mb-2">
+            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day, i) => (
+              <div key={i} className="text-center text-xs text-muted-foreground font-medium py-2">
+                {day}
               </div>
             ))}
           </div>
@@ -264,40 +400,40 @@ function DashboardStats({
                 key={idx}
                 onClick={() => day.date && !day.isLocked && !day.isFuture && onDayClick(day)}
                 disabled={!day.date || day.isLocked || day.isFuture}
-                className={`aspect-square rounded lg:rounded-lg text-xs lg:text-sm flex flex-col items-center justify-center transition-all relative p-1 lg:p-2 ${
+                className={`aspect-square rounded-lg text-sm flex flex-col items-center justify-center transition-all relative ${
                   !day.date
                     ? "invisible"
                     : day.isLocked
-                    ? "bg-secondary/50 opacity-40"
+                    ? "bg-secondary/30 opacity-40 cursor-not-allowed"
                     : day.isFuture
-                    ? "bg-secondary/20 text-muted-foreground"
+                    ? "bg-secondary/20 text-muted-foreground cursor-default"
                     : day.hasData && day.isSuccess
-                    ? "bg-success/20 text-success hover:bg-success/30"
+                    ? "bg-success/10 text-success hover:bg-success/20 border border-success/20"
                     : day.hasData && !day.isSuccess
-                    ? "bg-danger/20 text-danger hover:bg-danger/30"
-                    : "bg-secondary/50 hover:bg-secondary"
-                } ${day.isToday ? "ring-2 ring-primary" : ""}`}
+                    ? "bg-danger/10 text-danger hover:bg-danger/20 border border-danger/20"
+                    : "bg-secondary/30 hover:bg-secondary/50 text-muted-foreground"
+                } ${day.isToday ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}
               >
                 <span className="font-medium">{day.date && day.dayOfMonth}</span>
                 {day.weight && (
-                  <span className="text-[8px] lg:text-[10px] text-muted-foreground mt-0.5 hidden sm:block">{day.weight}kg</span>
+                  <span className="text-[9px] opacity-70 mt-0.5">{day.weight}</span>
                 )}
               </button>
             ))}
           </div>
 
           {/* Legend */}
-          <div className="flex flex-wrap items-center gap-3 lg:gap-6 mt-3 lg:mt-4 pt-3 lg:pt-4 border-t border-border text-xs lg:text-sm text-muted-foreground">
-            <div className="flex items-center gap-1.5 lg:gap-2">
-              <div className="w-2.5 h-2.5 lg:w-3 lg:h-3 rounded bg-success/20 border border-success/30"></div>
-              <span>Deficit</span>
+          <div className="flex flex-wrap items-center gap-4 mt-4 pt-4 border-t border-border text-xs text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded bg-success/10 border border-success/20"></div>
+              <span>Deficit (good)</span>
             </div>
-            <div className="flex items-center gap-1.5 lg:gap-2">
-              <div className="w-2.5 h-2.5 lg:w-3 lg:h-3 rounded bg-danger/20 border border-danger/30"></div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded bg-danger/10 border border-danger/20"></div>
               <span>Surplus</span>
             </div>
-            <div className="flex items-center gap-1.5 lg:gap-2">
-              <div className="w-2.5 h-2.5 lg:w-3 lg:h-3 rounded ring-2 ring-primary"></div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded ring-2 ring-primary"></div>
               <span>Today</span>
             </div>
           </div>
@@ -352,7 +488,7 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
         {
           id: "welcome",
           role: "assistant",
-          content: "Hey! 👋 What have you eaten or done today?\n\nTry: \"2 eggs and toast\" or \"30 min run\"",
+          content: "Hey! 👋 Tell me what you ate or did today.\n\nExamples:\n• \"2 eggs and toast for breakfast\"\n• \"30 minute run\"\n• \"Coffee with oat milk\"",
         },
       ]);
     }
@@ -483,7 +619,7 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
       {
         id: Date.now().toString(),
         role: "assistant",
-        content: "✅ Logged! What else?",
+        content: "✅ Logged! What else did you have?",
         confirmed: true,
       },
     ]);
@@ -493,17 +629,22 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-background">
       {/* Header */}
       <div className="p-4 border-b border-border">
-        <h2 className="font-display font-semibold flex items-center gap-2">
-          <span>💬</span> AI Diary
-        </h2>
-        <p className="text-xs text-muted-foreground mt-1">Log food & exercise naturally</p>
+        <div className="flex items-center gap-3">
+          <div className="icon-container bg-primary/10">
+            <span className="text-lg">💬</span>
+          </div>
+          <div>
+            <h2 className="font-display font-semibold text-foreground">AI Diary</h2>
+            <p className="text-xs text-muted-foreground">Log food & exercise naturally</p>
+          </div>
+        </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-2">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
         <AnimatePresence>
           {messages.map((message) => (
             <motion.div
@@ -513,34 +654,34 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
               className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
             >
               <div
-                className={`max-w-[90%] rounded-2xl px-3 py-2 text-sm ${
+                className={`max-w-[85%] rounded-xl px-4 py-2.5 text-sm ${
                   message.role === "user"
-                    ? "bg-primary text-primary-foreground rounded-br-sm"
-                    : "bg-secondary rounded-bl-sm"
+                    ? "bg-primary text-white rounded-br-none"
+                    : "bg-secondary text-foreground rounded-bl-none"
                 }`}
               >
-                <p className="whitespace-pre-wrap">{message.content}</p>
+                <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
 
                 {message.parsedData && !message.confirmed && (
-                  <div className="mt-2 pt-2 border-t border-border/30">
-                    <div className="space-y-1 text-xs">
+                  <div className="mt-3 pt-3 border-t border-white/10">
+                    <div className="space-y-1.5">
                       {message.parsedData.items.map((item, idx) => (
-                        <div key={idx} className="flex justify-between gap-2">
-                          <span className="truncate">{item.description}</span>
-                          <span className="opacity-70 shrink-0">{item.calories}</span>
+                        <div key={idx} className="flex justify-between gap-3 text-xs">
+                          <span className="truncate opacity-90">{item.description}</span>
+                          <span className="font-medium shrink-0">{item.calories} cal</span>
                         </div>
                       ))}
                     </div>
-                    <div className="mt-2 flex gap-1">
+                    <div className="mt-3 flex gap-2">
                       <Button
                         size="sm"
                         onClick={() => handleConfirm(message.id)}
-                        className="h-6 text-xs bg-success hover:bg-success/90 px-2"
+                        className="h-8 text-xs bg-success hover:bg-success/90 text-white flex-1"
                       >
-                        ✓ Log
+                        ✓ Log this
                       </Button>
-                      <Button size="sm" variant="ghost" className="h-6 text-xs px-2">
-                        ✗
+                      <Button size="sm" variant="outline" className="h-8 text-xs border-white/20 hover:bg-white/10">
+                        ✗ Edit
                       </Button>
                     </div>
                   </div>
@@ -552,11 +693,11 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
 
         {loading && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start">
-            <div className="bg-secondary rounded-2xl rounded-bl-sm px-3 py-2">
-              <div className="flex gap-1">
-                <span className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce" />
-                <span className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "0.1s" }} />
-                <span className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "0.2s" }} />
+            <div className="bg-secondary rounded-xl rounded-bl-none px-4 py-3">
+              <div className="flex gap-1.5">
+                <span className="w-2 h-2 bg-primary rounded-full animate-bounce" />
+                <span className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "0.1s" }} />
+                <span className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "0.2s" }} />
               </div>
             </div>
           </motion.div>
@@ -566,17 +707,23 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
       </div>
 
       {/* Input */}
-      <div className="p-3 border-t border-border">
+      <div className="p-4 border-t border-border">
         <form onSubmit={handleSubmit} className="flex gap-2">
-          <Input
+          <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="What did you eat?"
-            className="flex-1 bg-secondary/50 border-0 text-sm h-9"
+            placeholder="What did you eat or do?"
+            className="flex-1 h-10 px-4 text-sm bg-secondary border-0 rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
             disabled={loading}
           />
-          <Button type="submit" disabled={loading || !input.trim()} size="sm" className="bg-primary h-9 px-3">
-            →
+          <Button 
+            type="submit" 
+            disabled={loading || !input.trim()} 
+            className="h-10 w-10 bg-primary hover:bg-primary/90 rounded-lg p-0"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+            </svg>
           </Button>
         </form>
       </div>

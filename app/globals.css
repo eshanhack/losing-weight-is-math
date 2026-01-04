@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
 
 @import "tailwindcss";
 @import "tw-animate-css";
@@ -56,87 +56,93 @@
 }
 
 :root {
-  /* Fonts */
-  --font-display: 'Space Grotesk', sans-serif;
+  /* Fonts - Clean modern sans-serif */
+  --font-display: 'DM Sans', sans-serif;
   --font-body: 'Inter', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 
-  --radius: 0.625rem;
+  --radius: 0.75rem;
   
   /* 
-   * "Clinical Confidence" - Dark Theme Only
-   * Data-forward, confidence-inspiring, slightly clinical but warm
+   * FitFuel-Inspired Dark Theme
+   * Deep charcoal with orange accents, clean and modern
    */
   
-  /* Core backgrounds */
-  --background: #0A0A0B;
-  --foreground: #F4F4F5;
+  /* Core backgrounds - Deep charcoal */
+  --background: #0D0D0D;
+  --foreground: #FFFFFF;
   
-  /* Surfaces */
-  --card: #141416;
-  --card-foreground: #F4F4F5;
-  --popover: #1C1C1F;
-  --popover-foreground: #F4F4F5;
+  /* Surfaces - Elevated cards */
+  --card: #171717;
+  --card-foreground: #FFFFFF;
+  --popover: #1F1F1F;
+  --popover-foreground: #FFFFFF;
   
-  /* Primary - Blue accent */
-  --primary: #3B82F6;
+  /* Primary - Vibrant Orange */
+  --primary: #F97316;
   --primary-foreground: #FFFFFF;
   
-  /* Secondary */
-  --secondary: #1C1C1F;
-  --secondary-foreground: #F4F4F5;
+  /* Secondary - Subtle dark */
+  --secondary: #262626;
+  --secondary-foreground: #FFFFFF;
   
   /* Muted */
-  --muted: #1C1C1F;
-  --muted-foreground: #A1A1AA;
+  --muted: #262626;
+  --muted-foreground: #737373;
   
-  /* Accent */
-  --accent: #3B82F6;
+  /* Accent - Orange */
+  --accent: #F97316;
   --accent-foreground: #FFFFFF;
-  --accent-glow: rgba(59, 130, 246, 0.15);
+  --accent-glow: rgba(249, 115, 22, 0.2);
   
   /* Destructive */
   --destructive: #EF4444;
   --destructive-foreground: #FFFFFF;
   
-  /* Borders & inputs */
-  --border: #2A2A2E;
-  --input: #2A2A2E;
-  --ring: #3B82F6;
+  /* Borders & inputs - Subtle */
+  --border: #2A2A2A;
+  --input: #262626;
+  --ring: #F97316;
   
-  /* Semantic colors - THE CORE OF THE APP */
+  /* Semantic colors */
   --success: #22C55E;
   --success-muted: #166534;
-  --success-glow: rgba(34, 197, 94, 0.15);
+  --success-glow: rgba(34, 197, 94, 0.2);
   --danger: #EF4444;
-  --danger-muted: #7F1D1D;
-  --danger-glow: rgba(239, 68, 68, 0.15);
+  --danger-muted: #991B1B;
+  --danger-glow: rgba(239, 68, 68, 0.2);
   
-  /* Gamification */
-  --gold: #F59E0B;
-  --gold-glow: rgba(245, 158, 11, 0.2);
+  /* Gamification - Gold/Amber */
+  --gold: #FBBF24;
+  --gold-glow: rgba(251, 191, 36, 0.25);
+  
+  /* Progress bar gradient colors */
+  --progress-red: #EF4444;
+  --progress-orange: #F97316;
+  --progress-yellow: #FBBF24;
+  --progress-green: #22C55E;
   
   /* Charts */
-  --chart-1: #3B82F6;
+  --chart-1: #F97316;
   --chart-2: #22C55E;
-  --chart-3: #F59E0B;
-  --chart-4: #8B5CF6;
-  --chart-5: #EC4899;
+  --chart-3: #FBBF24;
+  --chart-4: #3B82F6;
+  --chart-5: #A855F7;
   
   /* Sidebar */
-  --sidebar: #0A0A0B;
-  --sidebar-foreground: #F4F4F5;
-  --sidebar-primary: #3B82F6;
+  --sidebar: #0D0D0D;
+  --sidebar-foreground: #FFFFFF;
+  --sidebar-primary: #F97316;
   --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #1C1C1F;
-  --sidebar-accent-foreground: #F4F4F5;
-  --sidebar-border: #2A2A2E;
-  --sidebar-ring: #3B82F6;
+  --sidebar-accent: #262626;
+  --sidebar-accent-foreground: #FFFFFF;
+  --sidebar-border: #2A2A2A;
+  --sidebar-ring: #F97316;
 }
 
-/* No light mode - dark only */
+/* Dark mode only */
 .dark {
-  /* Same as :root - we're dark mode only */
+  /* Same as :root */
 }
 
 @layer base {
@@ -151,6 +157,7 @@
   
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-display);
+    font-weight: 600;
   }
   
   code, pre, .mono {
@@ -159,29 +166,76 @@
 }
 
 @layer utilities {
-  /* Number display - for stats/metrics */
+  /* Display font utility */
   .font-display {
     font-family: var(--font-display);
   }
   
-  /* Success glow for deficit cards */
+  /* Glows */
   .glow-success {
     box-shadow: 0 0 20px var(--success-glow), 0 0 40px var(--success-glow);
   }
   
-  /* Danger glow for surplus */
   .glow-danger {
     box-shadow: 0 0 20px var(--danger-glow), 0 0 40px var(--danger-glow);
   }
   
-  /* Gold glow for streaks */
   .glow-gold {
     box-shadow: 0 0 20px var(--gold-glow), 0 0 40px var(--gold-glow);
   }
   
-  /* Accent glow */
   .glow-accent {
     box-shadow: 0 0 20px var(--accent-glow), 0 0 40px var(--accent-glow);
+  }
+  
+  /* Progress bar gradient */
+  .progress-gradient {
+    background: linear-gradient(90deg, 
+      var(--progress-red) 0%, 
+      var(--progress-orange) 33%, 
+      var(--progress-yellow) 66%, 
+      var(--progress-green) 100%
+    );
+  }
+  
+  /* Pill/badge styles */
+  .pill {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+  
+  .pill-success {
+    @apply bg-success/20 text-success;
+  }
+  
+  .pill-warning {
+    @apply bg-gold/20 text-gold;
+  }
+  
+  .pill-danger {
+    @apply bg-danger/20 text-danger;
+  }
+  
+  .pill-primary {
+    @apply bg-primary/20 text-primary;
+  }
+  
+  .pill-muted {
+    @apply bg-secondary text-muted-foreground;
+  }
+  
+  /* Icon container */
+  .icon-container {
+    @apply w-10 h-10 rounded-xl flex items-center justify-center;
+  }
+  
+  /* Subtle card hover */
+  .card-hover {
+    @apply transition-all duration-200 hover:bg-secondary/50 hover:border-border/80;
+  }
+  
+  /* Table row hover */
+  .table-row-hover {
+    @apply transition-colors hover:bg-secondary/30;
   }
   
   /* Animated gradient background */
@@ -189,7 +243,7 @@
     background: linear-gradient(
       135deg,
       var(--background) 0%,
-      #0F0F12 50%,
+      #141414 50%,
       var(--background) 100%
     );
     background-size: 200% 200%;
@@ -202,19 +256,37 @@
     100% { background-position: 0% 50%; }
   }
   
-  /* Grid pattern overlay */
+  /* Subtle grid pattern */
   .bg-grid-pattern {
     background-image: 
-      linear-gradient(rgba(59, 130, 246, 0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(59, 130, 246, 0.03) 1px, transparent 1px);
-    background-size: 50px 50px;
+      linear-gradient(rgba(249, 115, 22, 0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(249, 115, 22, 0.02) 1px, transparent 1px);
+    background-size: 40px 40px;
   }
   
   /* Text gradient */
   .text-gradient {
-    background: linear-gradient(135deg, var(--primary) 0%, #60A5FA 100%);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--gold) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+  }
+  
+  /* Scrollbar styling */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: var(--background);
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 3px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: var(--muted-foreground);
   }
 }
