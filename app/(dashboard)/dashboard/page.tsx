@@ -762,6 +762,86 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
 
       const data: AIParseResponse = await response.json();
 
+      // Check if this is an edit request AND there's an unconfirmed food/exercise log
+      const pendingLog = messages.find(
+        m => m.parsedData && 
+        !m.confirmed && 
+        (m.parsedData.type === "food" || m.parsedData.type === "exercise") &&
+        m.parsedData.items.length > 0
+      );
+
+      if ((data.type === "edit" || data.type === "multi_edit") && pendingLog) {
+        // UPDATE THE PENDING LOG IN PLACE instead of creating an edit operation
+        const editsToApply = data.type === "multi_edit" && data.edits 
+          ? data.edits 
+          : [{ search_term: data.search_term!, updates: data.updates! }];
+        
+        // Create updated items
+        const updatedItems = [...(pendingLog.parsedData!.items as Array<{ description: string; calories: number; protein: number; emoji: string }>)];
+        const updatedItemNames: string[] = [];
+        
+        for (const edit of editsToApply) {
+          const searchTerm = edit.search_term.toLowerCase();
+          
+          // Find matching items in the pending log
+          for (let i = 0; i < updatedItems.length; i++) {
+            if (updatedItems[i].description.toLowerCase().includes(searchTerm)) {
+              if (edit.updates?.calories !== undefined) {
+                updatedItems[i] = { ...updatedItems[i], calories: edit.updates.calories };
+              }
+              if (edit.updates?.protein !== undefined) {
+                updatedItems[i] = { ...updatedItems[i], protein: edit.updates.protein };
+              }
+              updatedItemNames.push(updatedItems[i].description);
+            }
+          }
+        }
+        
+        if (updatedItemNames.length > 0) {
+          // Recalculate totals
+          const newTotalCalories = updatedItems.reduce((sum, item) => sum + item.calories, 0);
+          const newTotalProtein = updatedItems.reduce((sum, item) => sum + item.protein, 0);
+          
+          // Update the pending message with new values
+          setMessages(prev => prev.map(m => 
+            m.id === pendingLog.id 
+              ? {
+                  ...m,
+                  parsedData: {
+                    ...m.parsedData!,
+                    items: updatedItems,
+                    total_calories: newTotalCalories,
+                    total_protein: newTotalProtein,
+                  }
+                }
+              : m
+          ));
+          
+          // Add a confirmation message
+          const confirmMessage: ChatMessage = {
+            id: (Date.now() + 1).toString(),
+            role: "assistant",
+            content: `✅ Updated ${updatedItemNames.join(", ")} in the preview above. Click "Log this" when you're ready!`,
+            confirmed: true,
+            timestamp: new Date().toISOString(),
+          };
+          setMessages(prev => [...prev, confirmMessage]);
+          
+          // Save messages to database
+          const supabase = createClient();
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            await supabase.from("chat_messages").insert([
+              { user_id: user.id, role: "user", content: input, log_date: today },
+              { user_id: user.id, role: "assistant", content: confirmMessage.content, log_date: today },
+            ]);
+          }
+          
+          setLoading(false);
+          return; // Don't create a new edit operation
+        }
+      }
+
       const assistantMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
