@@ -541,26 +541,20 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
-  const [weightReminderShown, setWeightReminderShown] = useState(false);
   const [upgradeReminderShown, setUpgradeReminderShown] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { showToast } = useToast();
   const { trialInfo } = useDashboard();
   
+  // Use a REF to track if weight reminder has been checked - refs persist and don't cause re-renders
+  const weightReminderCheckedRef = useRef(false);
+  
   // Use LOCAL date, not UTC!
   const today = getLocalDateString();
 
   useEffect(() => {
-    loadChatHistory();
+    loadChatHistoryAndCheckWeight();
   }, []);
-  
-  // DISABLED: Weight reminder was causing issues - showing even when weight was logged
-  // TODO: Re-implement properly after investigating root cause
-  // useEffect(() => {
-  //   if (dataLoaded && !weightReminderShown) {
-  //     checkWeightReminderFromDB();
-  //   }
-  // }, [dataLoaded]);
   
   // Check for trial upgrade reminder (2 days or less before expiry)
   useEffect(() => {
@@ -608,70 +602,25 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Check if we should remind user to log their weight - queries DB directly for accuracy
-  const checkWeightReminderFromDB = async () => {
-    // Only check if it's past 9am local time
-    const now = new Date();
-    const currentHour = now.getHours();
-    if (currentHour < 9) return;
-
-    // Already shown? Don't show again
-    if (weightReminderShown) return;
-
-    // Query database directly to check if weight is logged for today
+  // Combined function: Load chat history, THEN check if weight reminder is needed
+  // This ensures no race conditions - everything happens in sequence
+  const loadChatHistoryAndCheckWeight = async () => {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    const { data: todayLog } = await supabase
-      .from("daily_logs")
-      .select("weight_kg")
-      .eq("user_id", user.id)
-      .eq("log_date", today)
-      .maybeSingle();
-
-    // If weight is logged, don't show reminder
-    if (todayLog && todayLog.weight_kg !== null && todayLog.weight_kg !== undefined) {
-      return;
-    }
-
-    // No weight logged today - show reminder
-    setWeightReminderShown(true);
+    // STEP 1: Get today's date string (for queries)
+    const todayDateStr = getLocalDateString();
     
-    // Get appropriate greeting based on time of day
-    let greeting = "Good morning";
-    if (currentHour >= 12 && currentHour < 17) {
-      greeting = "Good afternoon";
-    } else if (currentHour >= 17) {
-      greeting = "Good evening";
-    }
-    
-    // Add reminder message after a short delay so it appears after welcome
-    setTimeout(() => {
-      setMessages(prev => [
-        ...prev,
-        {
-          id: "weight-reminder-" + Date.now(),
-          role: "assistant",
-          content: `⚖️ ${greeting}! Have you weighed yourself today? Just tell me your weight (e.g., "I weigh 82kg" or "weight 80.5") and I'll log it for you!`,
-          timestamp: new Date().toISOString(),
-        }
-      ]);
-    }, 1500);
-  };
-
-  const loadChatHistory = async () => {
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
+    // STEP 2: Load chat messages
     const { data: chatMessages } = await supabase
       .from("chat_messages")
       .select("*")
       .eq("user_id", user.id)
-      .eq("log_date", today)
+      .eq("log_date", todayDateStr)
       .order("created_at", { ascending: true });
 
+    // STEP 3: Set messages
     if (chatMessages && chatMessages.length > 0) {
       setMessages(
         chatMessages.map((m) => ({
@@ -692,6 +641,61 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
         },
       ]);
     }
+
+    // STEP 4: Check weight reminder (only once, using ref)
+    if (weightReminderCheckedRef.current) {
+      return; // Already checked, don't check again
+    }
+    weightReminderCheckedRef.current = true;
+
+    // STEP 5: Only check if it's past 9am local time
+    const now = new Date();
+    const currentHour = now.getHours();
+    if (currentHour < 9) {
+      return; // Too early, don't show reminder
+    }
+
+    // STEP 6: Query database DIRECTLY for today's weight
+    const { data: todayLog, error } = await supabase
+      .from("daily_logs")
+      .select("weight_kg")
+      .eq("user_id", user.id)
+      .eq("log_date", todayDateStr)
+      .maybeSingle();
+
+    // STEP 7: Check if weight exists - use != null to catch both null and undefined
+    const hasWeight = todayLog?.weight_kg != null;
+    
+    // Debug logging (can be removed later)
+    console.log("[Weight Reminder Check]", {
+      todayDateStr,
+      todayLog,
+      hasWeight,
+      error: error?.message,
+    });
+
+    if (hasWeight) {
+      console.log("[Weight Reminder] Weight already logged:", todayLog.weight_kg, "kg - NOT showing reminder");
+      return; // Weight exists, don't show reminder
+    }
+
+    // STEP 8: No weight logged - show reminder after delay
+    console.log("[Weight Reminder] No weight logged for today - showing reminder");
+    
+    const greeting = currentHour < 12 ? "Good morning" : currentHour < 17 ? "Good afternoon" : "Good evening";
+    
+    // Small delay so it appears after the welcome message
+    setTimeout(() => {
+      setMessages(prev => [
+        ...prev,
+        {
+          id: "weight-reminder-" + Date.now(),
+          role: "assistant",
+          content: `⚖️ ${greeting}! Have you weighed yourself today? Just tell me your weight (e.g., "I weigh 82kg" or "weight 80.5") and I'll log it for you!`,
+          timestamp: new Date().toISOString(),
+        }
+      ]);
+    }, 1500);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
