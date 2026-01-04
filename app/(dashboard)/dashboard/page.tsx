@@ -2844,7 +2844,7 @@ function DashboardContent() {
     const calendarDays: CalendarDay[] = [];
 
     for (let i = 0; i < startDayOfWeek; i++) {
-      calendarDays.push({ date: "", dayOfMonth: 0, weight: null, weightChange: null, balance: 0, protein: 0, isSuccess: false, isLocked: false, isFuture: true, isToday: false, hasData: false });
+      calendarDays.push({ date: "", dayOfMonth: 0, weight: null, weightChange: null, balance: 0, protein: 0, intake: 0, outtake: 0, isSuccess: false, isLocked: false, isFuture: true, isToday: false, hasData: false });
     }
 
     // First pass: collect all weights for the month
