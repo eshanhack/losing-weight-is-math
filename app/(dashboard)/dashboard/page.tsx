@@ -533,6 +533,129 @@ function DashboardStats({
 }
 
 // ============================================================================
+// COACHING MESSAGE GENERATOR
+// ============================================================================
+
+interface CoachingContext {
+  currentBalance: number; // Current day's caloric balance (negative = deficit, positive = surplus)
+  goalDeficit: number; // User's target daily deficit (e.g., -500, -1000)
+  tdee: number; // User's TDEE
+  currentHour: number; // Current hour (0-23) for time-aware suggestions
+}
+
+function generateCoachingMessage(ctx: CoachingContext): string | null {
+  const { currentBalance, goalDeficit, tdee, currentHour } = ctx;
+  
+  // Activity calories burned estimates (per minute, average adult)
+  const activities = {
+    walk: { name: "walking", emoji: "🚶", calPerMin: 4, intensity: "light" },
+    briskWalk: { name: "brisk walking", emoji: "🚶‍♂️", calPerMin: 5.5, intensity: "moderate" },
+    jog: { name: "jogging", emoji: "🏃", calPerMin: 9, intensity: "moderate" },
+    run: { name: "running", emoji: "🏃‍♂️", calPerMin: 12, intensity: "high" },
+    cycle: { name: "cycling", emoji: "🚴", calPerMin: 8, intensity: "moderate" },
+    hiit: { name: "HIIT workout", emoji: "💪", calPerMin: 14, intensity: "high" },
+  };
+
+  // Calculate how far from goal they are
+  const overGoalBy = currentBalance - goalDeficit; // Positive means over goal
+  const isInSurplus = currentBalance > 0;
+  const isAtMaintenance = currentBalance >= -100 && currentBalance <= 100;
+  const hitGoal = currentBalance <= goalDeficit;
+
+  // If they hit their goal, no coaching needed
+  if (hitGoal) {
+    return null;
+  }
+
+  // Helper to format activity suggestion
+  const suggestActivity = (caloriesToBurn: number): string => {
+    const suggestions: string[] = [];
+    
+    // Walking (always suggest, it's accessible)
+    const walkMins = Math.ceil(caloriesToBurn / activities.walk.calPerMin);
+    if (walkMins <= 60) {
+      suggestions.push(`${activities.walk.emoji} ${walkMins} min walk`);
+    } else if (walkMins <= 90) {
+      suggestions.push(`${activities.walk.emoji} ${walkMins} min walk (or split into two)`);
+    }
+    
+    // Brisk walk
+    const briskMins = Math.ceil(caloriesToBurn / activities.briskWalk.calPerMin);
+    if (briskMins <= 45) {
+      suggestions.push(`${activities.briskWalk.emoji} ${briskMins} min brisk walk`);
+    }
+    
+    // Jogging (if reasonable time)
+    const jogMins = Math.ceil(caloriesToBurn / activities.jog.calPerMin);
+    if (jogMins <= 30 && jogMins >= 10) {
+      suggestions.push(`${activities.jog.emoji} ${jogMins} min jog`);
+    }
+    
+    // Running (if short time needed)
+    const runMins = Math.ceil(caloriesToBurn / activities.run.calPerMin);
+    if (runMins <= 25 && runMins >= 10) {
+      suggestions.push(`${activities.run.emoji} ${runMins} min run`);
+    }
+    
+    // HIIT (if short time needed)
+    const hiitMins = Math.ceil(caloriesToBurn / activities.hiit.calPerMin);
+    if (hiitMins <= 20 && hiitMins >= 10) {
+      suggestions.push(`${activities.hiit.emoji} ${hiitMins} min HIIT`);
+    }
+
+    return suggestions.slice(0, 3).join(" • ");
+  };
+
+  // Time-aware greeting
+  const timeGreeting = currentHour < 12 ? "this morning" : currentHour < 17 ? "this afternoon" : "this evening";
+
+  // SCENARIO 1: Large surplus (600+ calories over TDEE)
+  if (isInSurplus && currentBalance >= 600) {
+    const toMaintenance = currentBalance;
+    const suggestions = suggestActivity(Math.min(toMaintenance, 400)); // Cap at realistic amount
+    return `⚠️ You're ${currentBalance} cal over maintenance ${timeGreeting}. It's hard to burn it all, but some activity will help minimize the damage!\n\nTry: ${suggestions}\n\nEven a short walk is better than nothing! Don't let one day derail your progress 💪`;
+  }
+
+  // SCENARIO 2: Moderate surplus (300-600 calories over TDEE)
+  if (isInSurplus && currentBalance >= 300) {
+    const toMaintenance = currentBalance;
+    const suggestions = suggestActivity(toMaintenance);
+    return `📊 You're ${currentBalance} cal over maintenance. Let's get back to break-even!\n\nSuggested activities to burn ${toMaintenance} cal:\n${suggestions}\n\nYou've got this! 🔥`;
+  }
+
+  // SCENARIO 3: Small surplus (1-300 calories over TDEE)
+  if (isInSurplus) {
+    const toMaintenance = currentBalance;
+    const toGoal = overGoalBy;
+    const suggestions = suggestActivity(toGoal);
+    return `💡 You're slightly over maintenance (+${currentBalance} cal). A quick activity can get you back on track!\n\nTo hit your goal deficit (${Math.abs(goalDeficit)} cal):\n${suggestions}\n\nOr even a short ${Math.ceil(toMaintenance / activities.walk.calPerMin)} min walk gets you to break-even!`;
+  }
+
+  // SCENARIO 4: At maintenance (around 0 balance)
+  if (isAtMaintenance) {
+    const toGoal = Math.abs(goalDeficit);
+    const suggestions = suggestActivity(toGoal);
+    return `⚖️ You're at maintenance ${timeGreeting}. Not bad, but let's hit that deficit goal!\n\nTo reach your ${Math.abs(goalDeficit)} cal deficit:\n${suggestions}\n\nKeep going! 💪`;
+  }
+
+  // SCENARIO 5: In deficit but not meeting goal
+  if (currentBalance < 0 && overGoalBy > 0) {
+    // They're in deficit but not enough to hit goal
+    const calToGo = overGoalBy;
+    
+    // Only coach if they're more than 200 cal away from goal
+    if (calToGo < 200) {
+      return `👍 Almost there! Just ${calToGo} more cal to hit your goal. A ${Math.ceil(calToGo / activities.walk.calPerMin)} min walk would do it!`;
+    }
+    
+    const suggestions = suggestActivity(calToGo);
+    return `📈 Good job staying in deficit! You're ${Math.abs(currentBalance)} cal under maintenance.\n\nTo hit your ${Math.abs(goalDeficit)} cal goal, burn ${calToGo} more:\n${suggestions}`;
+  }
+
+  return null;
+}
+
+// ============================================================================
 // AI DIARY COMPONENT
 // ============================================================================
 
@@ -1267,6 +1390,67 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
           timestamp: new Date().toISOString(),
         },
       ]);
+
+      // COACHING MESSAGE: After food is logged, check if user needs activity suggestions
+      if (parsedData.type === "food") {
+        // Fetch updated daily totals and user profile for coaching
+        const { data: updatedLog } = await supabase
+          .from("daily_logs")
+          .select("caloric_intake, caloric_outtake")
+          .eq("user_id", user.id)
+          .eq("log_date", localToday)
+          .single();
+
+        const { data: userProfile } = await supabase
+          .from("profiles")
+          .select("tdee, daily_calorie_goal")
+          .eq("id", user.id)
+          .single();
+
+        if (updatedLog && userProfile) {
+          const tdee = userProfile.tdee || 2000;
+          const goalDeficit = -(userProfile.daily_calorie_goal || 500); // Convert to negative (e.g., -500)
+          const intake = updatedLog.caloric_intake || 0;
+          const outtake = updatedLog.caloric_outtake || 0;
+          
+          // Balance = Intake - (TDEE + Exercise burned)
+          // Negative = deficit (good), Positive = surplus (bad)
+          const currentBalance = intake - (tdee + outtake);
+          const currentHour = new Date().getHours();
+
+          const coachingMessage = generateCoachingMessage({
+            currentBalance,
+            goalDeficit,
+            tdee,
+            currentHour,
+          });
+
+          if (coachingMessage) {
+            // Add a slight delay for better UX
+            setTimeout(async () => {
+              // Save coaching message to database
+              await supabase.from("chat_messages").insert({
+                user_id: user.id,
+                role: "assistant",
+                content: coachingMessage,
+                log_date: localToday,
+              });
+
+              // Add coaching message to local state
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: (Date.now() + 100).toString(),
+                  role: "assistant",
+                  content: coachingMessage,
+                  confirmed: true,
+                  timestamp: new Date().toISOString(),
+                },
+              ]);
+            }, 1500); // 1.5 second delay
+          }
+        }
+      }
 
       // Trigger dashboard refresh WITHOUT page reload
       onEntryConfirmed();
