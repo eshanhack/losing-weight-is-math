@@ -1986,20 +1986,32 @@ function AIDiary({ onEntryConfirmed, todayHasWeight, dataLoaded }: { onEntryConf
         // Fetch updated daily totals and user profile for coaching
         const { data: updatedLog } = await supabase
           .from("daily_logs")
-          .select("caloric_intake, caloric_outtake")
+          .select("caloric_intake, caloric_outtake, weight_kg")
           .eq("user_id", user.id)
           .eq("log_date", localToday)
           .single();
 
         const { data: userProfile } = await supabase
           .from("profiles")
-          .select("tdee, daily_calorie_goal")
+          .select("*")
           .eq("id", user.id)
           .single();
 
         if (updatedLog && userProfile) {
-          const tdee = userProfile.tdee || 2000;
-          const goalDeficit = -(userProfile.daily_calorie_goal || 500); // Convert to negative (e.g., -500)
+          // Calculate TDEE properly from profile
+          const currentWeight = updatedLog.weight_kg || userProfile.current_weight_kg || userProfile.starting_weight_kg;
+          const age = calculateAge(new Date(userProfile.date_of_birth));
+          const bmr = calculateBMR(currentWeight, userProfile.height_cm, age, userProfile.gender);
+          const tdee = calculateTDEE(bmr, userProfile.activity_level);
+          
+          // Calculate goal deficit from user's goal weight and target date
+          const goalAnalysis = calculateRequiredDailyDeficit(
+            currentWeight,
+            userProfile.goal_weight_kg,
+            new Date(userProfile.goal_date)
+          );
+          const goalDeficit = -goalAnalysis.dailyDeficit; // Negative (e.g., -868)
+          
           const intake = updatedLog.caloric_intake || 0;
           const outtake = updatedLog.caloric_outtake || 0;
           
