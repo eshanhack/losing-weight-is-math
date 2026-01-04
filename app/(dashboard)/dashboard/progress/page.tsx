@@ -37,7 +37,10 @@ export default function ProgressPage() {
     totalLost: 0,
     avgDeficit: 0,
     daysTracked: 0,
-    projectedGoalDate: "",
+    userGoalDate: "",
+    daysUntilGoal: 0,
+    onTrack: true,
+    projectedDate: "",
   });
 
   useEffect(() => {
@@ -178,19 +181,27 @@ export default function ProgressPage() {
       });
     }
 
-    // Project goal date based on current progress
+    // User's goal date from profile
+    const userGoalDateStr = goalDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    const daysUntilGoal = Math.max(0, Math.ceil((goalDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)));
+    
+    // Calculate if on track based on current progress
     const remainingWeight = lastKnownWeight - goalWeight;
     const avgKgPerDay = totalLost > 0 && actualWeights.length > 1 
       ? totalLost / (actualWeights.length - 1)
       : kgPerDay;
-    const daysToGoal = remainingWeight > 0 ? Math.ceil(remainingWeight / avgKgPerDay) : 0;
-    const projectedDate = new Date(today.getTime() + daysToGoal * 24 * 60 * 60 * 1000);
+    const daysNeededAtCurrentPace = remainingWeight > 0 ? Math.ceil(remainingWeight / avgKgPerDay) : 0;
+    const projectedDate = new Date(today.getTime() + daysNeededAtCurrentPace * 24 * 60 * 60 * 1000);
+    const onTrack = projectedDate <= goalDate || remainingWeight <= 0;
 
     setStats({
       totalLost: Math.round(totalLost * 10) / 10,
       avgDeficit: deficitDays > 0 ? Math.round(totalDeficit / deficitDays) : 0,
       daysTracked: actualWeights.length,
-      projectedGoalDate: projectedDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+      userGoalDate: userGoalDateStr,
+      daysUntilGoal,
+      onTrack,
+      projectedDate: projectedDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
     });
 
     setLoading(false);
@@ -247,16 +258,24 @@ export default function ProgressPage() {
           </div>
         </div>
         <div className="bg-card rounded-xl p-4 border border-border">
-          <div className="text-xs text-muted-foreground mb-1">Days Tracked</div>
-          <div className="text-2xl font-display font-bold text-foreground">
-            {stats.daysTracked}
+          <div className="text-xs text-muted-foreground mb-1">Your Goal Date</div>
+          <div className="text-lg font-display font-bold text-gold">
+            {stats.userGoalDate}
+          </div>
+          <div className="text-xs text-muted-foreground mt-1">
+            {stats.daysUntilGoal > 0 ? `${stats.daysUntilGoal} days left` : "Goal date reached!"}
           </div>
         </div>
         <div className="bg-card rounded-xl p-4 border border-border">
-          <div className="text-xs text-muted-foreground mb-1">Projected Goal Date</div>
-          <div className="text-lg font-display font-bold text-gold">
-            {stats.projectedGoalDate}
+          <div className="text-xs text-muted-foreground mb-1">Status</div>
+          <div className={`text-lg font-display font-bold ${stats.onTrack ? "text-success" : "text-danger"}`}>
+            {stats.onTrack ? "✅ On Track" : "⚠️ Behind"}
           </div>
+          {!stats.onTrack && (
+            <div className="text-xs text-muted-foreground mt-1">
+              At current pace: {stats.projectedDate}
+            </div>
+          )}
         </div>
       </motion.div>
 
