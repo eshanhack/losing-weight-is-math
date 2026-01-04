@@ -131,12 +131,31 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check for edit/delete operations first (don't need nutrition lookup)
+    // Check for edit/delete/weight operations first (don't need nutrition lookup)
     const lowerMessage = message.toLowerCase();
     const isEdit = /\b(update|change|correct|actually|edit|modify|fix|adjust)\b/.test(lowerMessage) && 
                    !/\b(i ate|i had|i eat|just had|for breakfast|for lunch|for dinner)\b/.test(lowerMessage);
     const isDelete = /\b(delete|remove|undo)\b/.test(lowerMessage);
     const isExercise = /\b(run|walk|jog|bike|swim|workout|exercise|gym|cycling|hiit|yoga|lift|weights)\b/.test(lowerMessage);
+    
+    // Check for weight entry (e.g., "I weigh 82kg", "my weight is 80.5", "82.3 kg today", "weight: 81")
+    const weightMatch = lowerMessage.match(/(?:weigh|weight|scale|weighed|weighing)[:\s]+(\d+(?:\.\d+)?)\s*(?:kg|kilos?|pounds?|lbs?)?/i) ||
+                        lowerMessage.match(/(\d+(?:\.\d+)?)\s*(?:kg|kilos?)\s*(?:today|now|this morning)?/i) ||
+                        lowerMessage.match(/(?:i'?m|i am)\s+(\d+(?:\.\d+)?)\s*(?:kg|kilos?)/i);
+    
+    if (weightMatch && !isEdit && !isDelete) {
+      const weight = parseFloat(weightMatch[1]);
+      if (weight > 20 && weight < 500) { // Sanity check for realistic weight
+        return NextResponse.json({
+          type: "weight",
+          items: [],
+          total_calories: 0,
+          total_protein: 0,
+          weight_kg: weight,
+          message: `⚖️ Got it! I'll log your weight as ${weight} kg.`,
+        } as AIParseResponse);
+      }
+    }
 
     // For food entries, get accurate nutrition data from CalorieNinjas
     let nutritionContext = "";

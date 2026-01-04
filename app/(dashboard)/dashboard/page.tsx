@@ -134,14 +134,15 @@ function ProgressBar({ value, max, showGradient = false }: { value: number; max:
   );
 }
 
-function DashboardStats({ 
-  stats, 
-  calendar, 
-  profile, 
+function DashboardStats({
+  stats,
+  calendar,
+  profile,
   logs,
   onDayClick,
   onTodayCardClick,
-}: { 
+  onRealWeightCardClick,
+}: {
   stats: {
     todayBalance: number;
     todayIntake: number;
@@ -163,6 +164,7 @@ function DashboardStats({
   logs: DailyLog[];
   onDayClick: (day: CalendarDay) => void;
   onTodayCardClick: () => void;
+  onRealWeightCardClick: () => void;
 }) {
   // Format balance with goal comparison
   const formattedBalance = formatBalanceWithGoal(stats.todayBalance, stats.goalDeficit);
@@ -287,22 +289,23 @@ function DashboardStats({
           </Card>
         </motion.div>
 
-        {/* Card 3: Real Weight */}
+        {/* Card 3: Real Weight - Clickable to log weight */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
         >
-          <Card className="p-4 lg:p-5 bg-card border-border h-full card-hover">
+          <Card 
+            className="p-4 lg:p-5 bg-card border-border h-full card-hover cursor-pointer hover:border-primary/50 transition-colors"
+            onClick={onRealWeightCardClick}
+          >
             <div className="flex items-start justify-between mb-3">
               <div className="icon-container bg-primary/10">
                 <span className="text-lg">⚖️</span>
               </div>
-              <button className="text-muted-foreground hover:text-foreground">
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M6 10a2 2 0 11-4 0 2 2 0 014 0zM12 10a2 2 0 11-4 0 2 2 0 014 0zM16 12a2 2 0 100-4 2 2 0 000 4z" />
-                </svg>
-              </button>
+              <span className="text-[10px] text-primary font-medium px-2 py-0.5 bg-primary/10 rounded-full">
+                Tap to log
+              </span>
             </div>
             <h3 className="font-display font-semibold text-foreground mb-1">Real Weight</h3>
             <div className="flex items-baseline gap-2 mb-1">
@@ -773,6 +776,26 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
           }
         }
 
+      } else if (parsedData.type === "weight" && parsedData.weight_kg) {
+        // WEIGHT LOGGING OPERATION
+        const weight = parsedData.weight_kg;
+        
+        // Update today's log with the weight
+        const { error: weightError } = await supabase
+          .from("daily_logs")
+          .update({ weight_kg: weight })
+          .eq("id", log.id);
+
+        if (weightError) {
+          console.error("Error saving weight:", weightError);
+          confirmationContent = "❌ Error saving weight. Please try again.";
+          showToast("Error saving weight", "error");
+        } else {
+          confirmationContent = `⚖️ Weight logged: ${weight} kg!`;
+          showToast(`Weight logged: ${weight} kg`, "weight");
+          logNotification(createWeightNotification(weight, localToday));
+        }
+
       } else {
         // NEW ENTRY OPERATION (food or exercise)
         const entries = parsedData.items.map((item) => ({
@@ -943,6 +966,16 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
                         </div>
                       )}
 
+                      {/* For WEIGHT entries */}
+                      {message.parsedData.type === "weight" && message.parsedData.weight_kg && (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-lg">⚖️</span>
+                            <span className="font-display text-xl font-bold">{message.parsedData.weight_kg} kg</span>
+                          </div>
+                        </div>
+                      )}
+
                       {/* For NEW ENTRIES (food/exercise) */}
                       {(message.parsedData.type === "food" || message.parsedData.type === "exercise") && message.parsedData.items.length > 0 && (
                         <div className="space-y-1.5">
@@ -975,15 +1008,19 @@ function AIDiary({ onEntryConfirmed }: { onEntryConfirmed: () => void }) {
                               ? "bg-danger hover:bg-danger/90 text-white" 
                               : message.parsedData.type === "edit"
                               ? "bg-gold hover:bg-gold/90 text-black"
+                              : message.parsedData.type === "weight"
+                              ? "bg-blue-500 hover:bg-blue-500/90 text-white"
                               : "bg-success hover:bg-success/90 text-white"
                           }`}
                         >
                           {confirmingId === message.id 
-                            ? (message.parsedData.type === "edit" ? "Updating..." : message.parsedData.type === "delete" ? "Deleting..." : "Logging...")
+                            ? (message.parsedData.type === "edit" ? "Updating..." : message.parsedData.type === "delete" ? "Deleting..." : message.parsedData.type === "weight" ? "Saving..." : "Logging...")
                             : message.parsedData.type === "edit" 
                             ? "✓ Update" 
                             : message.parsedData.type === "delete" 
                             ? "✓ Delete" 
+                            : message.parsedData.type === "weight"
+                            ? "✓ Log Weight"
                             : "✓ Log this"}
                         </Button>
                         <Button 
@@ -1072,6 +1109,7 @@ function ResizableSplitView({
   logs,
   onDayClick,
   onTodayCardClick,
+  onRealWeightCardClick,
   onEntryConfirmed,
 }: {
   stats: {
@@ -1095,6 +1133,7 @@ function ResizableSplitView({
   logs: DailyLog[];
   onDayClick: (day: CalendarDay) => void;
   onTodayCardClick: () => void;
+  onRealWeightCardClick: () => void;
   onEntryConfirmed: () => void;
 }) {
   const { width: diaryWidth, isResizing, startResizing } = useResizable(380, 280, 600);
@@ -1113,6 +1152,7 @@ function ResizableSplitView({
           logs={logs}
           onDayClick={onDayClick}
           onTodayCardClick={onTodayCardClick}
+          onRealWeightCardClick={onRealWeightCardClick}
         />
       </div>
 
@@ -1160,6 +1200,8 @@ function DashboardContent() {
   const [showWelcome, setShowWelcome] = useState(isWelcome);
   const [editingEntry, setEditingEntry] = useState<DayEntry | null>(null);
   const [editForm, setEditForm] = useState({ description: "", calories: 0, protein: 0 });
+  const [showWeightModal, setShowWeightModal] = useState(false);
+  const [weightInput, setWeightInput] = useState("");
 
   const [stats, setStats] = useState({
     todayBalance: 0,
@@ -1303,6 +1345,10 @@ function DashboardContent() {
     const startDayOfWeek = firstDay.getDay();
     const trialEnd = sub?.trial_ends_at ? new Date(sub.trial_ends_at) : null;
     const isPaid = sub?.status === "active";
+    
+    // Get user's signup date to show starting weight
+    const signupDate = profile?.created_at ? getLocalDateString(new Date(profile.created_at)) : null;
+    const startingWeight = profile?.starting_weight_kg || null;
 
     const calendarDays: CalendarDay[] = [];
 
@@ -1326,11 +1372,17 @@ function DashboardContent() {
       // Success = met or exceeded goal deficit (balance <= goalDeficit, since negative = deficit)
       // e.g., -1100 <= -1000 means you exceeded your 1000 cal deficit goal
       const isSuccess = log ? balance <= goalDeficit : false;
+      
+      // Show starting weight on signup day if no weight logged yet
+      let weight = log?.weight_kg || null;
+      if (!weight && dateStr === signupDate && startingWeight) {
+        weight = startingWeight;
+      }
 
       calendarDays.push({
         date: dateStr,
         dayOfMonth: day,
-        weight: log?.weight_kg || null,
+        weight,
         balance,
         protein,
         isSuccess,
@@ -1385,6 +1437,22 @@ function DashboardContent() {
     if (day.date) {
       fetchDayEntries(day.date);
     }
+  };
+
+  // Handle clicking the Real Weight card to log weight
+  const handleRealWeightCardClick = () => {
+    setWeightInput(stats.realWeight?.toString() || "");
+    setShowWeightModal(true);
+  };
+
+  const saveWeightFromModal = async () => {
+    const weight = parseFloat(weightInput);
+    if (!weight || isNaN(weight)) return;
+    
+    const todayStr = getLocalDateString();
+    await saveWeight(todayStr, weight);
+    setShowWeightModal(false);
+    setWeightInput("");
   };
 
   // Also allow clicking Today's Balance card to open today
@@ -1621,6 +1689,7 @@ function DashboardContent() {
         logs={logs}
         onDayClick={handleDayClick}
         onTodayCardClick={handleTodayCardClick}
+        onRealWeightCardClick={handleRealWeightCardClick}
         onEntryConfirmed={handleEntryConfirmed}
       />
 
@@ -1633,6 +1702,7 @@ function DashboardContent() {
           logs={logs}
           onDayClick={handleDayClick}
           onTodayCardClick={handleTodayCardClick}
+          onRealWeightCardClick={handleRealWeightCardClick}
         />
       </div>
 
@@ -1869,6 +1939,60 @@ function DashboardContent() {
                   Save
                 </Button>
               </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Weight Input Modal (from Real Weight Card) */}
+      <Dialog open={showWeightModal} onOpenChange={setShowWeightModal}>
+        <DialogContent className="bg-card border-border max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-display text-center">
+              ⚖️ Log Today's Weight
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <p className="text-sm text-muted-foreground text-center">
+              Enter your weight for {new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
+            </p>
+            <div className="flex items-center gap-3">
+              <Input
+                type="number"
+                step="0.1"
+                placeholder="75.0"
+                value={weightInput}
+                onChange={(e) => setWeightInput(e.target.value)}
+                className="bg-background text-2xl font-display text-center h-14"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    saveWeightFromModal();
+                  }
+                }}
+                autoFocus
+              />
+              <span className="text-xl text-muted-foreground">kg</span>
+            </div>
+            {stats.realWeight && (
+              <p className="text-xs text-center text-muted-foreground">
+                Current 7-day average: <span className="font-semibold text-foreground">{stats.realWeight.toFixed(1)} kg</span>
+              </p>
+            )}
+            <div className="flex gap-2">
+              <Button 
+                onClick={saveWeightFromModal}
+                disabled={!weightInput || isNaN(parseFloat(weightInput))}
+                className="flex-1 bg-primary hover:bg-primary/90"
+              >
+                Save Weight
+              </Button>
+              <Button 
+                onClick={() => setShowWeightModal(false)}
+                variant="outline"
+                className="flex-1"
+              >
+                Cancel
+              </Button>
             </div>
           </div>
         </DialogContent>
