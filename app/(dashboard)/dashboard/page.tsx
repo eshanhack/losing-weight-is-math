@@ -102,15 +102,15 @@ interface PrestigeBadge {
 
 const LEVELS: Level[] = [
   { level: 1, name: "Rookie", icon: "🌱", xpRequired: 0, color: "text-gray-400" },
-  { level: 2, name: "Starter", icon: "🔥", xpRequired: 500, color: "text-orange-400" },
-  { level: 3, name: "Apprentice", icon: "⚡", xpRequired: 1500, color: "text-yellow-400" },
-  { level: 4, name: "Fighter", icon: "💪", xpRequired: 3500, color: "text-amber-500" },
-  { level: 5, name: "Warrior", icon: "⚔️", xpRequired: 7000, color: "text-orange-500" },
-  { level: 6, name: "Champion", icon: "🏆", xpRequired: 12000, color: "text-yellow-500" },
-  { level: 7, name: "Legend", icon: "👑", xpRequired: 20000, color: "text-amber-400" },
-  { level: 8, name: "Titan", icon: "🌟", xpRequired: 35000, color: "text-purple-400" },
-  { level: 9, name: "Mythic", icon: "💎", xpRequired: 60000, color: "text-cyan-400" },
-  { level: 10, name: "Immortal", icon: "🔮", xpRequired: 100000, color: "text-fuchsia-400" },
+  { level: 2, name: "Starter", icon: "🔥", xpRequired: 300, color: "text-orange-400" },
+  { level: 3, name: "Apprentice", icon: "⚡", xpRequired: 800, color: "text-yellow-400" },
+  { level: 4, name: "Fighter", icon: "💪", xpRequired: 1800, color: "text-amber-500" },
+  { level: 5, name: "Warrior", icon: "⚔️", xpRequired: 3500, color: "text-orange-500" },
+  { level: 6, name: "Champion", icon: "🏆", xpRequired: 6000, color: "text-yellow-500" },
+  { level: 7, name: "Legend", icon: "👑", xpRequired: 10000, color: "text-amber-400" },
+  { level: 8, name: "Titan", icon: "🌟", xpRequired: 16000, color: "text-purple-400" },
+  { level: 9, name: "Mythic", icon: "💎", xpRequired: 25000, color: "text-cyan-400" },
+  { level: 10, name: "Immortal", icon: "🔮", xpRequired: 40000, color: "text-fuchsia-400" },
 ];
 
 const PRESTIGE_BADGES: PrestigeBadge[] = [
@@ -129,9 +129,10 @@ const PRESTIGE_BADGES: PrestigeBadge[] = [
 // Calculate XP from a deficit day with streak multiplier
 function calculateDayXP(deficit: number, streakDay: number): number {
   if (deficit >= 0) return 0; // No XP for surplus days
-  const baseXP = Math.abs(deficit); // Base XP = calories in deficit
+  // Base XP = deficit / 10 (so -800 cal deficit = 80 base XP)
+  const baseXP = Math.abs(deficit) / 10;
   // Streak multiplier: compounds as streak grows
-  const multiplier = 1 + (streakDay - 1) * 0.15; // Day 1: 1x, Day 7: 1.9x, Day 14: 2.95x
+  const multiplier = 1 + (streakDay - 1) * 0.1; // Day 1: 1x, Day 7: 1.6x, Day 14: 2.3x
   return Math.round(baseXP * multiplier);
 }
 
@@ -668,8 +669,8 @@ function DashboardStats({
             <div className="mt-4 pt-4 border-t border-border">
               <h4 className="text-xs font-semibold mb-1">How XP Works</h4>
               <ul className="text-[10px] text-muted-foreground space-y-0.5">
-                <li>• Base XP = calories in deficit (e.g., -500 cal = 500 XP)</li>
-                <li>• Streak multiplier: +15% per day (Day 7 = 1.9x!)</li>
+                <li>• Base XP = deficit ÷ 10 (e.g., -800 cal = 80 XP)</li>
+                <li>• Streak multiplier: +10% per day (Day 7 = 1.6x!)</li>
                 <li>• Miss goal but stay in deficit = 50% XP</li>
                 <li>• Surplus day = streak resets, no XP</li>
               </ul>
