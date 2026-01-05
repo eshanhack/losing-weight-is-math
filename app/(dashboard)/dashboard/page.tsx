@@ -81,6 +81,144 @@ function useResizable(initialWidth: number, minWidth: number, maxWidth: number) 
 }
 
 // ============================================================================
+// GAMIFICATION SYSTEM
+// ============================================================================
+
+interface Level {
+  level: number;
+  name: string;
+  icon: string;
+  xpRequired: number;
+  color: string;
+}
+
+interface PrestigeBadge {
+  id: number;
+  name: string;
+  icon: string;
+  streakRequired: number;
+  color: string;
+}
+
+const LEVELS: Level[] = [
+  { level: 1, name: "Rookie", icon: "🌱", xpRequired: 0, color: "text-gray-400" },
+  { level: 2, name: "Starter", icon: "🔥", xpRequired: 500, color: "text-orange-400" },
+  { level: 3, name: "Apprentice", icon: "⚡", xpRequired: 1500, color: "text-yellow-400" },
+  { level: 4, name: "Fighter", icon: "💪", xpRequired: 3500, color: "text-amber-500" },
+  { level: 5, name: "Warrior", icon: "⚔️", xpRequired: 7000, color: "text-orange-500" },
+  { level: 6, name: "Champion", icon: "🏆", xpRequired: 12000, color: "text-yellow-500" },
+  { level: 7, name: "Legend", icon: "👑", xpRequired: 20000, color: "text-amber-400" },
+  { level: 8, name: "Titan", icon: "🌟", xpRequired: 35000, color: "text-purple-400" },
+  { level: 9, name: "Mythic", icon: "💎", xpRequired: 60000, color: "text-cyan-400" },
+  { level: 10, name: "Immortal", icon: "🔮", xpRequired: 100000, color: "text-fuchsia-400" },
+];
+
+const PRESTIGE_BADGES: PrestigeBadge[] = [
+  { id: 1, name: "Bronze", icon: "🥉", streakRequired: 7, color: "text-amber-600" },
+  { id: 2, name: "Silver", icon: "🥈", streakRequired: 14, color: "text-gray-300" },
+  { id: 3, name: "Gold", icon: "🥇", streakRequired: 21, color: "text-yellow-400" },
+  { id: 4, name: "Platinum", icon: "💫", streakRequired: 28, color: "text-cyan-300" },
+  { id: 5, name: "Diamond", icon: "💎", streakRequired: 35, color: "text-blue-400" },
+  { id: 6, name: "Ruby", icon: "❤️‍🔥", streakRequired: 42, color: "text-red-500" },
+  { id: 7, name: "Sapphire", icon: "💙", streakRequired: 49, color: "text-blue-500" },
+  { id: 8, name: "Emerald", icon: "💚", streakRequired: 56, color: "text-emerald-500" },
+  { id: 9, name: "Obsidian", icon: "🖤", streakRequired: 63, color: "text-slate-800" },
+  { id: 10, name: "Legendary", icon: "👑", streakRequired: 70, color: "text-amber-400" },
+];
+
+// Calculate XP from a deficit day with streak multiplier
+function calculateDayXP(deficit: number, streakDay: number): number {
+  if (deficit >= 0) return 0; // No XP for surplus days
+  const baseXP = Math.abs(deficit); // Base XP = calories in deficit
+  // Streak multiplier: compounds as streak grows
+  const multiplier = 1 + (streakDay - 1) * 0.15; // Day 1: 1x, Day 7: 1.9x, Day 14: 2.95x
+  return Math.round(baseXP * multiplier);
+}
+
+// Calculate total XP from daily logs
+function calculateTotalXP(logs: DailyLog[], tdee: number, goalDeficit: number): number {
+  let totalXP = 0;
+  let currentStreak = 0;
+  
+  // Sort logs by date ascending (oldest first)
+  const sortedLogs = [...logs].sort((a, b) => 
+    new Date(a.log_date).getTime() - new Date(b.log_date).getTime()
+  );
+  
+  for (const log of sortedLogs) {
+    const balance = calculateDailyBalance(tdee, log.caloric_intake, log.caloric_outtake);
+    // XP awarded for meeting goal (balance <= goalDeficit) or being in deficit
+    if (balance <= goalDeficit) {
+      currentStreak++;
+      totalXP += calculateDayXP(balance, currentStreak);
+    } else if (balance < 0) {
+      // Still in deficit but didn't meet goal - smaller XP, streak continues
+      currentStreak++;
+      totalXP += Math.round(calculateDayXP(balance, currentStreak) * 0.5);
+    } else {
+      // Surplus day - streak breaks
+      currentStreak = 0;
+    }
+  }
+  
+  return totalXP;
+}
+
+// Get current level from XP
+function getCurrentLevel(xp: number): Level {
+  for (let i = LEVELS.length - 1; i >= 0; i--) {
+    if (xp >= LEVELS[i].xpRequired) {
+      return LEVELS[i];
+    }
+  }
+  return LEVELS[0];
+}
+
+// Get next level (or null if max)
+function getNextLevel(xp: number): Level | null {
+  const currentLevel = getCurrentLevel(xp);
+  const nextLevelIndex = LEVELS.findIndex(l => l.level === currentLevel.level + 1);
+  return nextLevelIndex !== -1 ? LEVELS[nextLevelIndex] : null;
+}
+
+// Get XP progress to next level (0-100)
+function getLevelProgress(xp: number): number {
+  const current = getCurrentLevel(xp);
+  const next = getNextLevel(xp);
+  if (!next) return 100; // Max level
+  const xpInLevel = xp - current.xpRequired;
+  const xpNeeded = next.xpRequired - current.xpRequired;
+  return Math.min(100, Math.round((xpInLevel / xpNeeded) * 100));
+}
+
+// Get earned prestige badges from max streak achieved
+function getEarnedPrestiges(maxStreak: number): PrestigeBadge[] {
+  return PRESTIGE_BADGES.filter(badge => maxStreak >= badge.streakRequired);
+}
+
+// Calculate max streak ever achieved from logs
+function calculateMaxStreak(logs: DailyLog[], tdee: number, goalDeficit: number): number {
+  let maxStreak = 0;
+  let currentStreak = 0;
+  
+  const sortedLogs = [...logs].sort((a, b) => 
+    new Date(a.log_date).getTime() - new Date(b.log_date).getTime()
+  );
+  
+  for (const log of sortedLogs) {
+    const balance = calculateDailyBalance(tdee, log.caloric_intake, log.caloric_outtake);
+    if (balance < 0) { // In deficit
+      currentStreak++;
+      maxStreak = Math.max(maxStreak, currentStreak);
+    } else {
+      currentStreak = 0;
+    }
+  }
+  
+  return maxStreak;
+}
+
+// ============================================================================
 // TYPES
 // ============================================================================
 
@@ -163,6 +301,8 @@ function DashboardStats({
     predictedWeight: number | null;
     predictedChange: number | null;
     streak: number;
+    totalXP: number;
+    maxStreak: number;
   };
   calendar: CalendarDay[];
   profile: Profile | null;
@@ -171,6 +311,13 @@ function DashboardStats({
   onTodayCardClick: () => void;
   onRealWeightCardClick: () => void;
 }) {
+  const [showAchievements, setShowAchievements] = useState(false);
+  
+  // Gamification calculations
+  const currentLevel = getCurrentLevel(stats.totalXP);
+  const nextLevel = getNextLevel(stats.totalXP);
+  const levelProgress = getLevelProgress(stats.totalXP);
+  const earnedPrestiges = getEarnedPrestiges(stats.maxStreak);
   // Format balance with goal comparison
   const formattedBalance = formatBalanceWithGoal(stats.todayBalance, stats.goalDeficit);
   const formattedSevenDay = formatBalance(stats.sevenDayBalance);
@@ -352,22 +499,183 @@ function DashboardStats({
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.25 }}
         >
-          <Card className="p-3 lg:p-4 bg-card border-border border-gold/20 h-full card-hover">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-xs font-medium text-muted-foreground">Current Streak</h3>
-              <span className="text-[10px]">{stats.streak > 0 ? "🔥" : "💤"}</span>
+          <Card 
+            className="p-3 lg:p-4 bg-card border-border border-gold/20 h-full card-hover cursor-pointer"
+            onClick={() => setShowAchievements(true)}
+          >
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-1.5">
+                <span className={`text-sm ${currentLevel.color}`}>{currentLevel.icon}</span>
+                <span className="text-[10px] font-medium text-muted-foreground">{currentLevel.name}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                {earnedPrestiges.slice(-3).map((badge) => (
+                  <span key={badge.id} className="text-[10px]" title={`${badge.name} (${badge.streakRequired}d)`}>
+                    {badge.icon}
+                  </span>
+                ))}
+                {earnedPrestiges.length > 3 && (
+                  <span className="text-[8px] text-muted-foreground">+{earnedPrestiges.length - 3}</span>
+                )}
+              </div>
             </div>
-            <div className="flex items-end gap-2 mb-2">
+            <div className="flex items-end gap-2 mb-1">
               <span className="font-display text-2xl font-bold leading-none text-gold">
                 {stats.streak}
               </span>
-              <span className="text-xs text-muted-foreground pb-0.5">days</span>
+              <span className="text-xs text-muted-foreground pb-0.5">day streak 🔥</span>
             </div>
-            <div className="text-[10px] text-muted-foreground">
-              {stats.streak > 0 ? "Keep it going! 💪" : "Start your streak today!"}
+            {/* XP Progress Bar */}
+            <div className="mb-1">
+              <div className="flex justify-between text-[9px] text-muted-foreground mb-0.5">
+                <span>{stats.totalXP.toLocaleString()} XP</span>
+                <span>{nextLevel ? `${nextLevel.xpRequired.toLocaleString()} XP` : "MAX"}</span>
+              </div>
+              <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
+                <motion.div
+                  className="h-full bg-gradient-to-r from-gold to-amber-400 rounded-full"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${levelProgress}%` }}
+                  transition={{ duration: 0.8, ease: "easeOut" }}
+                />
+              </div>
+            </div>
+            <div className="text-[9px] text-muted-foreground/70">
+              Tap to view achievements
             </div>
           </Card>
         </motion.div>
+
+        {/* Achievements Modal */}
+        <Dialog open={showAchievements} onOpenChange={setShowAchievements}>
+          <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-display flex items-center gap-2">
+                🏅 Achievements
+              </DialogTitle>
+            </DialogHeader>
+            
+            {/* Current Stats */}
+            <div className="bg-secondary/50 rounded-lg p-4 mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <span className={`text-2xl ${currentLevel.color}`}>{currentLevel.icon}</span>
+                  <div>
+                    <p className={`font-bold ${currentLevel.color}`}>Level {currentLevel.level}: {currentLevel.name}</p>
+                    <p className="text-xs text-muted-foreground">{stats.totalXP.toLocaleString()} Total XP</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="font-display text-2xl font-bold text-gold">{stats.streak}</p>
+                  <p className="text-xs text-muted-foreground">Day Streak</p>
+                </div>
+              </div>
+              {nextLevel && (
+                <div>
+                  <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                    <span>Progress to {nextLevel.name}</span>
+                    <span>{(nextLevel.xpRequired - stats.totalXP).toLocaleString()} XP to go</span>
+                  </div>
+                  <div className="h-2 bg-secondary rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-gradient-to-r from-gold to-amber-400 rounded-full transition-all"
+                      style={{ width: `${levelProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Levels Section */}
+            <div className="mb-4">
+              <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                ⭐ Levels
+                <span className="text-xs font-normal text-muted-foreground">
+                  ({currentLevel.level}/{LEVELS.length})
+                </span>
+              </h3>
+              <div className="grid grid-cols-5 gap-2">
+                {LEVELS.map((level) => {
+                  const isEarned = stats.totalXP >= level.xpRequired;
+                  return (
+                    <div
+                      key={level.level}
+                      className={`relative group flex flex-col items-center p-2 rounded-lg border transition-all ${
+                        isEarned 
+                          ? "bg-secondary/50 border-border" 
+                          : "bg-secondary/20 border-border/30 opacity-50"
+                      }`}
+                      title={`Level ${level.level}: ${level.name} - ${level.xpRequired.toLocaleString()} XP`}
+                    >
+                      <span className={`text-xl ${isEarned ? "" : "grayscale opacity-30"}`}>
+                        {level.icon}
+                      </span>
+                      <span className={`text-[9px] mt-0.5 ${isEarned ? level.color : "text-muted-foreground/50"}`}>
+                        Lv.{level.level}
+                      </span>
+                      {/* Tooltip */}
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-popover border border-border rounded text-[10px] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                        <p className="font-medium">{level.name}</p>
+                        <p className="text-muted-foreground">{level.xpRequired.toLocaleString()} XP</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Prestige Badges Section */}
+            <div>
+              <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                🎖️ Prestige Badges
+                <span className="text-xs font-normal text-muted-foreground">
+                  ({earnedPrestiges.length}/{PRESTIGE_BADGES.length})
+                </span>
+              </h3>
+              <p className="text-xs text-muted-foreground mb-2">
+                Earn badges every 7 days of deficit streak!
+              </p>
+              <div className="grid grid-cols-5 gap-2">
+                {PRESTIGE_BADGES.map((badge) => {
+                  const isEarned = stats.maxStreak >= badge.streakRequired;
+                  return (
+                    <div
+                      key={badge.id}
+                      className={`relative group flex flex-col items-center p-2 rounded-lg border transition-all ${
+                        isEarned 
+                          ? "bg-secondary/50 border-border" 
+                          : "bg-secondary/20 border-border/30 opacity-50"
+                      }`}
+                    >
+                      <span className={`text-xl ${isEarned ? "" : "grayscale opacity-30"}`}>
+                        {badge.icon}
+                      </span>
+                      <span className={`text-[9px] mt-0.5 ${isEarned ? badge.color : "text-muted-foreground/50"}`}>
+                        {badge.streakRequired}d
+                      </span>
+                      {/* Tooltip */}
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-popover border border-border rounded text-[10px] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                        <p className="font-medium">{badge.name}</p>
+                        <p className="text-muted-foreground">{badge.streakRequired}-day streak</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* XP Explanation */}
+            <div className="mt-4 pt-4 border-t border-border">
+              <h4 className="text-xs font-semibold mb-1">How XP Works</h4>
+              <ul className="text-[10px] text-muted-foreground space-y-0.5">
+                <li>• Base XP = calories in deficit (e.g., -500 cal = 500 XP)</li>
+                <li>• Streak multiplier: +15% per day (Day 7 = 1.9x!)</li>
+                <li>• Miss goal but stay in deficit = 50% XP</li>
+                <li>• Surplus day = streak resets, no XP</li>
+              </ul>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Calendar - FitFuel style */}
@@ -2639,6 +2947,8 @@ function ResizableSplitView({
     predictedWeight: number | null;
     predictedChange: number | null;
     streak: number;
+    totalXP: number;
+    maxStreak: number;
   };
   calendar: CalendarDay[];
   profile: Profile | null;
@@ -2737,6 +3047,8 @@ function DashboardContent() {
     predictedWeight: null as number | null,
     predictedChange: null as number | null,
     streak: 0,
+    totalXP: 0,
+    maxStreak: 0,
   });
 
   const [calendar, setCalendar] = useState<CalendarDay[]>([]);
@@ -2833,6 +3145,10 @@ function DashboardContent() {
       profile.activity_level !== "sedentary"
     );
 
+    // Gamification: Calculate XP and max streak
+    const totalXP = calculateTotalXP(logs, tdee, goalDeficit);
+    const maxStreak = calculateMaxStreak(logs, tdee, goalDeficit);
+
     setStats({
       todayBalance,
       todayIntake,
@@ -2848,6 +3164,8 @@ function DashboardContent() {
       predictedWeight: prediction.predictedWeight,
       predictedChange: prediction.predictedChange,
       streak,
+      totalXP,
+      maxStreak,
     });
 
     buildCalendar(logs, sub, tdee, goalDeficit);
